@@ -14,6 +14,8 @@
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const blockId = () => `block-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  const clamp = (value, min, max, fallback) => Math.min(max, Math.max(min, Number.isFinite(Number(value)) ? Number(value) : fallback));
+  const IMAGE_RATIOS = { original: "", square: "1 / 1", landscape: "16 / 9", classic: "4 / 3", portrait: "3 / 4" };
 
   class AgendaBlockEditor {
     constructor(root, menu, options = {}) {
@@ -46,6 +48,16 @@
             mime: String(block.asset.mime || ""),
             filename: String(block.asset.filename || "imagem"),
             size: Number(block.asset.size || 0),
+          };
+          normalizedBlock.width = clamp(block.width, 20, 100, 100);
+          normalizedBlock.align = ["left", "center", "right"].includes(block.align) ? block.align : "center";
+          const crop = block.crop && typeof block.crop === "object" ? block.crop : {};
+          normalizedBlock.crop = {
+            ratio: Object.prototype.hasOwnProperty.call(IMAGE_RATIOS, crop.ratio) ? crop.ratio : "original",
+            zoom: clamp(crop.zoom, 100, 250, 100),
+            x: clamp(crop.x, 0, 100, 50),
+            y: clamp(crop.y, 0, 100, 50),
+            open: Boolean(crop.open),
           };
         }
         return normalizedBlock;
@@ -97,6 +109,9 @@
           filename: String(asset.filename || "imagem"),
           size: Number(asset.size || 0),
         },
+        width: 100,
+        align: "center",
+        crop: { ratio: "original", zoom: 100, x: 50, y: 50, open: false },
       };
       const activeIndex = this.activeBlockId ? this.blocks.findIndex((block) => block.id === this.activeBlockId) : -1;
       const index = activeIndex >= 0 ? activeIndex + 1 : this.blocks.length;
@@ -117,12 +132,22 @@
       this.root.addEventListener("input", (event) => {
         const row = event.target.closest(".block-row");
         if (!row) return;
+        if (event.target.matches("[data-image-field]")) {
+          this.updateImageField(row.dataset.id, event.target.dataset.imageField, event.target.value, false);
+          this.applyImageLayout(row);
+          return;
+        }
         this.syncFromDom();
         if (event.target.classList.contains("block-input") && event.target.textContent.startsWith("/")) this.openMenu(row.dataset.id, event.target.textContent.slice(1));
         else this.closeMenu();
         this.record();
       });
       this.root.addEventListener("change", (event) => {
+        const row = event.target.closest(".block-row");
+        if (row && event.target.matches("[data-image-field]")) {
+          this.updateImageField(row.dataset.id, event.target.dataset.imageField, event.target.value, true);
+          return;
+        }
         if (!event.target.matches(".block-check")) return;
         this.syncFromDom();
         this.record();
@@ -140,6 +165,12 @@
         if (row) this.activeBlockId = row.dataset.id;
       });
       this.root.addEventListener("click", (event) => {
+        const imageAction = event.target.closest("[data-image-action]");
+        if (imageAction) {
+          const row = imageAction.closest(".block-row");
+          this.handleImageAction(row.dataset.id, imageAction.dataset.imageAction);
+          return;
+        }
         const action = event.target.closest("[data-block-action]");
         if (!action) return;
         const row = action.closest(".block-row");
@@ -321,6 +352,42 @@
       this.focusBlock(id);
     }
 
+    updateImageField(id, field, value, shouldRecord) {
+      const block = this.blocks.find((item) => item.id === id && item.type === "image");
+      if (!block) return;
+      block.crop = block.crop || { ratio: "original", zoom: 100, x: 50, y: 50, open: true };
+      if (field === "ratio") block.crop.ratio = Object.prototype.hasOwnProperty.call(IMAGE_RATIOS, value) ? value : "original";
+      if (field === "zoom") block.crop.zoom = clamp(value, 100, 250, 100);
+      if (field === "x" || field === "y") block.crop[field] = clamp(value, 0, 100, 50);
+      if (shouldRecord) this.record();
+    }
+
+    applyImageLayout(row) {
+      const block = this.blocks.find((item) => item.id === row?.dataset.id);
+      const figure = row?.querySelector(".block-image-figure");
+      const frame = row?.querySelector(".image-frame");
+      const image = frame?.querySelector("img");
+      if (!block || !figure || !frame || !image) return;
+      const crop = block.crop || {};
+      figure.style.width = `${clamp(block.width, 20, 100, 100)}%`;
+      const ratio = IMAGE_RATIOS[crop.ratio] || "";
+      frame.style.aspectRatio = ratio;
+      frame.classList.toggle("is-cropped", Boolean(ratio));
+      image.style.objectPosition = `${clamp(crop.x, 0, 100, 50)}% ${clamp(crop.y, 0, 100, 50)}%`;
+      image.style.transform = ratio ? `scale(${clamp(crop.zoom, 100, 250, 100) / 100})` : "none";
+    }
+
+    handleImageAction(id, action) {
+      const block = this.blocks.find((item) => item.id === id && item.type === "image");
+      if (!block) return;
+      if (action === "smaller") block.width = clamp((block.width || 100) - 10, 20, 100, 100);
+      if (action === "larger") block.width = clamp((block.width || 100) + 10, 20, 100, 100);
+      if (action.startsWith("align-")) block.align = action.replace("align-", "");
+      if (action === "crop") block.crop.open = !block.crop.open;
+      if (action === "reset-crop") block.crop = { ratio: "original", zoom: 100, x: 50, y: 50, open: true };
+      this.commit();
+    }
+
     changeType(id, type) {
       const block = this.blocks.find((item) => item.id === id);
       if (!block || !TYPES[type]) return;
@@ -379,7 +446,25 @@
         if (block.type === "divider") {
           body = '<div class="block-divider" contenteditable="false"><hr></div>';
         } else if (block.type === "image" && block.asset && block.asset.id) {
-          body = `<figure class="block-image-figure"><img src="/api/assets/${this.escape(block.asset.id)}" alt="${this.escape(block.text || block.asset.filename)}" loading="lazy"><figcaption class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</figcaption></figure>`;
+          const crop = block.crop || { ratio: "original", zoom: 100, x: 50, y: 50, open: false };
+          const ratio = IMAGE_RATIOS[crop.ratio] || "";
+          const imageStyle = ratio ? `object-position:${crop.x}% ${crop.y}%;transform:scale(${crop.zoom / 100})` : "";
+          body = `<figure class="block-image-figure align-${block.align}" style="width:${block.width}%">
+            <div class="image-tools" contenteditable="false" aria-label="Controles da imagem">
+              <button type="button" data-image-action="smaller" title="Diminuir imagem" aria-label="Diminuir imagem">−</button><span class="image-size-label">${block.width}%</span><button type="button" data-image-action="larger" title="Aumentar imagem" aria-label="Aumentar imagem">+</button>
+              <span class="image-tools-separator"></span>
+              <button type="button" data-image-action="align-left" class="${block.align === "left" ? "active" : ""}" title="Alinhar a esquerda">←</button><button type="button" data-image-action="align-center" class="${block.align === "center" ? "active" : ""}" title="Centralizar">↔</button><button type="button" data-image-action="align-right" class="${block.align === "right" ? "active" : ""}" title="Alinhar a direita">→</button>
+              <span class="image-tools-separator"></span><button type="button" data-image-action="crop" class="${crop.open ? "active" : ""}">Cortar</button>
+            </div>
+            <div class="image-crop-panel ${crop.open ? "" : "hidden"}" contenteditable="false">
+              <label>Proporcao</label><select data-image-field="ratio"><option value="original" ${crop.ratio === "original" ? "selected" : ""}>Original</option><option value="square" ${crop.ratio === "square" ? "selected" : ""}>Quadrado 1:1</option><option value="landscape" ${crop.ratio === "landscape" ? "selected" : ""}>Paisagem 16:9</option><option value="classic" ${crop.ratio === "classic" ? "selected" : ""}>Classico 4:3</option><option value="portrait" ${crop.ratio === "portrait" ? "selected" : ""}>Retrato 3:4</option></select>
+              <label>Zoom</label><input type="range" min="100" max="250" step="5" value="${crop.zoom}" data-image-field="zoom">
+              <label>Horizontal</label><input type="range" min="0" max="100" value="${crop.x}" data-image-field="x">
+              <label>Vertical</label><input type="range" min="0" max="100" value="${crop.y}" data-image-field="y">
+              <span></span><button type="button" data-image-action="reset-crop">Restaurar recorte</button>
+            </div>
+            <div class="image-frame ${ratio ? "is-cropped" : ""}" style="${ratio ? `aspect-ratio:${ratio}` : ""}"><img src="/api/assets/${this.escape(block.asset.id)}" alt="${this.escape(block.text || block.asset.filename)}" loading="lazy" style="${imageStyle}"></div>
+            <figcaption class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</figcaption></figure>`;
         } else {
           body = `${marker}<div class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div>`;
         }

@@ -41,12 +41,18 @@ class DocumentModelTest(unittest.TestCase):
                         "type": "image",
                         "text": "Diagrama da arquitetura",
                         "asset": {"id": "a" * 64, "filename": "diagrama.png", "mime": "image/png"},
+                        "width": 60,
+                        "align": "right",
+                        "crop": {"ratio": "landscape", "zoom": 140, "x": 35, "y": 65},
                     }
                 ]
             },
         )
 
         self.assertEqual(document["blocks"][0]["asset"]["filename"], "diagrama.png")
+        self.assertEqual(document["blocks"][0]["width"], 60)
+        self.assertEqual(document["blocks"][0]["align"], "right")
+        self.assertEqual(document["blocks"][0]["crop"]["zoom"], 140)
         self.assertEqual(document["content"], "[Imagem: diagrama.png] Diagrama da arquitetura")
 
 

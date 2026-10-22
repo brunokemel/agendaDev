@@ -83,6 +83,8 @@ No executavel do Windows, os dados ficam em:
 
 Os dados persistentes ficam em `data/notes.json`, `data/notebooks.json` e, para imagens e documentos futuros, em `data/assets/`. Relatorios e backups podem ser gerados pela propria aplicacao.
 
+Imagens inseridas nas notas podem ser arrastadas entre os blocos, aumentadas ou reduzidas, alinhadas e recortadas visualmente por proporcao, zoom e ponto de foco. O recorte e reversivel e nao modifica o arquivo original. O botao **Modo escuro/Modo claro** fica visivel na barra superior e guarda a preferencia localmente.
+
 ## Backup completo e restauracao
 
 No aplicativo instalado, abra **Relatorios** e use **Exportar backup completo**. Escolha uma pasta de destino; o aplicativo criara nela uma subpasta com data e hora contendo notas, cadernos, assets, o registro de importacoes e os arquivos de `entrada_txt`. O manifesto do backup inclui hashes para detectar arquivos alterados ou corrompidos.

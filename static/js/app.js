@@ -368,7 +368,20 @@ function renderBlockPreview(blocks) {
     if (block.type === "checklist") return `<div>${block.checked ? "☑" : "☐"} ${text}</div>`;
     if (block.type === "quote") return `<blockquote>${text}</blockquote>`;
     if (block.type === "divider") return "<hr>";
-    if (block.type === "image" && block.asset && block.asset.id) return `<figure><img src="/api/assets/${encodeURIComponent(block.asset.id)}" alt="${escapeHtml(block.text || block.asset.filename || "Imagem")}" style="max-width:100%;max-height:520px"><figcaption>${text}</figcaption></figure>`;
+    if (block.type === "image" && block.asset && block.asset.id) {
+      const width = Math.min(100, Math.max(20, Number(block.width) || 100));
+      const align = ["left", "center", "right"].includes(block.align) ? block.align : "center";
+      const crop = block.crop || {};
+      const ratios = { square: "1 / 1", landscape: "16 / 9", classic: "4 / 3", portrait: "3 / 4" };
+      const ratio = ratios[crop.ratio];
+      const margin = align === "center" ? "0 auto" : align === "right" ? "0 0 0 auto" : "0 auto 0 0";
+      const zoom = Math.min(250, Math.max(100, Number.isFinite(Number(crop.zoom)) ? Number(crop.zoom) : 100));
+      const x = Math.min(100, Math.max(0, Number.isFinite(Number(crop.x)) ? Number(crop.x) : 50));
+      const y = Math.min(100, Math.max(0, Number.isFinite(Number(crop.y)) ? Number(crop.y) : 50));
+      const frameStyle = ratio ? `aspect-ratio:${ratio};overflow:hidden;position:relative` : "";
+      const imageStyle = ratio ? `width:100%;height:100%;object-fit:cover;object-position:${x}% ${y}%;transform:scale(${zoom / 100})` : "max-width:100%;max-height:520px";
+      return `<figure style="width:${width}%;${margin}"><div style="${frameStyle}"><img src="/api/assets/${encodeURIComponent(block.asset.id)}" alt="${escapeHtml(block.text || block.asset.filename || "Imagem")}" style="display:block;${imageStyle}"></div><figcaption>${text}</figcaption></figure>`;
+    }
     return `<p>${text || "<br>"}</p>`;
   }).join("");
 }
@@ -600,7 +613,7 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = selected;
   localStorage.setItem("agendaDev.theme", selected);
   const button = $("#btn-theme");
-  button.textContent = selected === "dark" ? "☀" : "☾";
+  button.innerHTML = selected === "dark" ? '<span aria-hidden="true">☀</span> <span class="theme-label">Modo claro</span>' : '<span aria-hidden="true">☾</span> <span class="theme-label">Modo escuro</span>';
   button.title = selected === "dark" ? "Usar modo claro" : "Usar modo escuro";
   button.setAttribute("aria-label", button.title);
 }
