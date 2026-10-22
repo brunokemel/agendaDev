@@ -1,0 +1,8 @@
+{
+  "id": "nt-fixture",
+  "title": "Reunião Produto",
+  "content": "Primeira linha.\nSegunda linha com acentuação.",
+  "importance": "alta",
+  "tags": ["produto", "planejamento"],
+  "due": "2026-10-30"
+}

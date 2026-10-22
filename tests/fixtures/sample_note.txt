@@ -1,0 +1,7 @@
+TITULO: Reunião Produto
+IMPORTANCIA: alta
+PRAZO: 2026-10-30
+TAGS: produto, planejamento
+
+Primeira linha.
+Segunda linha com acentuação.
