@@ -16,6 +16,18 @@
   --rail: 48px;
   --sidebar: 260px;
   font-family: "Segoe UI", "Segoe UI Variable", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #171717;
+  --paper: #202020;
+  --ink: #f1f1f1;
+  --muted: #aaa7a4;
+  --line: #3a3938;
+  --purple-soft: #392447;
+  --shadow: 0 1.6px 4px rgba(0, 0, 0, .48), 0 0.3px 1px rgba(0, 0, 0, .38);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -46,6 +58,7 @@ a { color: var(--mid); }
   background: transparent; color: #fff; display: grid; place-items: center;
 }
 .rail-btn:hover, .rail-btn.active { background: rgba(255,255,255,.16); }
+.theme-toggle { margin-top: auto; }
 
 .sidebar {
   background: #faf9f8;
@@ -241,6 +254,7 @@ kbd { border: 1px solid #c8c6c4; border-radius: 3px; background: #faf9f8; paddin
 }
 .block-toolbar button { border: 0; border-radius: 4px; background: transparent; padding: 4px 8px; font-size: 18px; }
 .block-toolbar button:hover { background: #edebe9; }
+.block-toolbar #block-image { font-size: 12px; padding: 6px 9px; }
 .block-toolbar span { margin-left: 5px; }
 .block-editor { padding: 20px 30px 120px 20px; min-height: 430px; }
 .block-row { position: relative; display: grid; grid-template-columns: 42px 1fr; border-radius: 4px; min-height: 34px; }
@@ -268,6 +282,11 @@ kbd { border: 1px solid #c8c6c4; border-radius: 3px; background: #faf9f8; paddin
 .type-quote .block-content { border-left: 3px solid var(--ink); padding-left: 12px; font-style: italic; }
 .type-checklist .block-input { line-height: 1.45; }
 .type-checklist:has(.block-check:checked) .block-input { text-decoration: line-through; color: var(--muted); }
+.type-image .block-content { display: block; padding: 8px 10px; }
+.block-image-figure { margin: 0; max-width: 100%; }
+.block-image-figure img { display: block; max-width: 100%; max-height: 520px; width: auto; height: auto; border-radius: 6px; box-shadow: var(--shadow); background: #ddd; }
+.block-image-figure .block-input { margin-top: 7px; color: var(--muted); font-size: 12px; font-style: italic; }
+.block-image-drop { outline: 2px dashed var(--purple); outline-offset: -8px; background: var(--purple-soft); }
 .block-divider { width: 100%; padding: 8px 0; }
 .block-divider hr { border: 0; border-top: 1px solid #c8c6c4; margin: 0; }
 .slash-menu {
@@ -331,6 +350,45 @@ kbd { border: 1px solid #c8c6c4; border-radius: 3px; background: #faf9f8; paddin
 .command-result small { color: var(--muted); margin-left: auto; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 :focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+
+:root[data-theme="dark"] .sidebar,
+:root[data-theme="dark"] .topbar,
+:root[data-theme="dark"] .drawer-panel,
+:root[data-theme="dark"] .editor-meta,
+:root[data-theme="dark"] .block-editor-wrap,
+:root[data-theme="dark"] .block-editor,
+:root[data-theme="dark"] .modal-card,
+:root[data-theme="dark"] .command-card,
+:root[data-theme="dark"] .slash-menu,
+:root[data-theme="dark"] .link-row,
+:root[data-theme="dark"] .export-options { background: var(--paper); color: var(--ink); }
+:root[data-theme="dark"] .brand,
+:root[data-theme="dark"] .links-col,
+:root[data-theme="dark"] .editor-bar,
+:root[data-theme="dark"] .block-row:hover,
+:root[data-theme="dark"] .export-preview,
+:root[data-theme="dark"] .file-drop { background: #252525; }
+:root[data-theme="dark"] .search-wrap,
+:root[data-theme="dark"] .stat-box,
+:root[data-theme="dark"] .tag { background: #303030; color: var(--ink); }
+:root[data-theme="dark"] .btn,
+:root[data-theme="dark"] .chip,
+:root[data-theme="dark"] .command-trigger,
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea { background: #292929; color: var(--ink); border-color: var(--line); }
+:root[data-theme="dark"] .block-toolbar { background: rgba(32,32,32,.96); }
+:root[data-theme="dark"] .nb-head:hover,
+:root[data-theme="dark"] .sec-item:hover,
+:root[data-theme="dark"] .all-item:hover,
+:root[data-theme="dark"] .shortcut-item:hover,
+:root[data-theme="dark"] .page-item:hover,
+:root[data-theme="dark"] .icon-btn:hover,
+:root[data-theme="dark"] .block-toolbar button:hover,
+:root[data-theme="dark"] .nb-head.active,
+:root[data-theme="dark"] .sec-item.active,
+:root[data-theme="dark"] .all-item.active { background: #343434; }
+:root[data-theme="dark"] mark { background: #725b16; color: #fff; }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: var(--rail) 1fr; }

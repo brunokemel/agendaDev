@@ -31,6 +31,24 @@ class DocumentModelTest(unittest.TestCase):
         self.assertEqual(document["content"], "Titulo\n[x] Tarefa")
         self.assertEqual(document["schema_version"], DOCUMENT_SCHEMA_VERSION)
 
+    def test_image_block_keeps_asset_metadata_and_searchable_caption(self):
+        document = apply_document_payload(
+            {},
+            {
+                "blocks": [
+                    {
+                        "id": "img",
+                        "type": "image",
+                        "text": "Diagrama da arquitetura",
+                        "asset": {"id": "a" * 64, "filename": "diagrama.png", "mime": "image/png"},
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(document["blocks"][0]["asset"]["filename"], "diagrama.png")
+        self.assertEqual(document["content"], "[Imagem: diagrama.png] Diagrama da arquitetura")
+
 
 if __name__ == "__main__":
     unittest.main()

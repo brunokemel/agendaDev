@@ -31,6 +31,10 @@ def blocks_to_plain_text(blocks):
         text = str(block.get("text") or "")
         if block_type == "divider":
             rendered.append("---")
+        elif block_type == "image":
+            asset = block.get("asset") if isinstance(block.get("asset"), dict) else {}
+            label = asset.get("filename") or "imagem"
+            rendered.append(f"[Imagem: {label}]" + (f" {text}" if text else ""))
         elif block_type == "checklist":
             rendered.append(f"[{'x' if block.get('checked') else ' '}] {text}")
         elif block_type == "bulleted_list":

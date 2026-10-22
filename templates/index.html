@@ -4,6 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>agendaDev</title>
+  <script>
+    (() => {
+      const saved = localStorage.getItem("agendaDev.theme");
+      document.documentElement.dataset.theme = saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    })();
+  </script>
   <link rel="icon" type="image/png" href="/logo.png">
   <link rel="stylesheet" href="/static/css/app.css">
 </head>
@@ -23,6 +29,7 @@
       <button class="rail-btn" data-view="report" title="Relatorios">
         <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2M9 17H7v-7h2zm4 0h-2V7h2zm4 0h-2v-4h2z"/></svg>
       </button>
+      <button class="rail-btn theme-toggle" id="btn-theme" title="Alternar tema" aria-label="Alternar tema">☾</button>
     </aside>
 
     <aside class="sidebar">
@@ -144,11 +151,13 @@
           <div class="block-toolbar" aria-label="Ferramentas do editor">
             <button type="button" id="block-undo" title="Desfazer (Ctrl+Z)">↶</button>
             <button type="button" id="block-redo" title="Refazer (Ctrl+Y)">↷</button>
+            <button type="button" id="block-image" title="Inserir imagem">▧ Imagem</button>
             <span>Digite <kbd>/</kbd> para adicionar blocos</span>
           </div>
           <div class="block-editor" id="block-editor"></div>
           <div class="slash-menu hidden" id="slash-menu"></div>
           <textarea id="ed-content" class="legacy-content" aria-hidden="true" tabindex="-1"></textarea>
+          <input id="block-image-file" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
         </div>
         <aside class="links-col">
           <div class="links-head">

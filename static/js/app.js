@@ -28,8 +28,9 @@ function toast(msg) {
 }
 
 async function api(path, opts = {}) {
+  const isForm = opts.body instanceof FormData;
   const res = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+    headers: isForm ? { ...(opts.headers || {}) } : { "Content-Type": "application/json", ...(opts.headers || {}) },
     ...opts,
   });
   if (!res.ok) {
@@ -367,6 +368,7 @@ function renderBlockPreview(blocks) {
     if (block.type === "checklist") return `<div>${block.checked ? "☑" : "☐"} ${text}</div>`;
     if (block.type === "quote") return `<blockquote>${text}</blockquote>`;
     if (block.type === "divider") return "<hr>";
+    if (block.type === "image" && block.asset && block.asset.id) return `<figure><img src="/api/assets/${encodeURIComponent(block.asset.id)}" alt="${escapeHtml(block.text || block.asset.filename || "Imagem")}" style="max-width:100%;max-height:520px"><figcaption>${text}</figcaption></figure>`;
     return `<p>${text || "<br>"}</p>`;
   }).join("");
 }
@@ -527,7 +529,7 @@ async function saveNote({ silent = false } = {}) {
   if (state.saveInFlight) await state.saveInFlight;
   const payload = gatherNote();
   const savingVersion = state.editorVersion;
-  const meaningful = payload.title !== "Sem titulo" || payload.blocks.some((block) => block.text.trim() || block.type === "divider");
+  const meaningful = payload.title !== "Sem titulo" || payload.blocks.some((block) => block.text.trim() || block.type === "divider" || block.type === "image");
   if (!payload.id && !meaningful) return;
   setSaveStatus("Salvando...", "saving");
   state.saveInFlight = (async () => {
@@ -569,8 +571,42 @@ function initBlockEditor() {
       setPreview();
       markEditorDirty();
     },
+    onImageFiles: uploadImages,
   });
   state.blockEditor.setBlocks([]);
+}
+
+async function uploadImages(files) {
+  const images = [...files].filter((file) => file.type.startsWith("image/"));
+  if (!images.length) return toast("Escolha uma imagem PNG, JPEG, WebP ou GIF");
+  setSaveStatus("Enviando imagem...", "saving");
+  for (const file of images) {
+    const form = new FormData();
+    form.append("file", file, file.name || "imagem");
+    try {
+      const data = await api("/api/assets", { method: "POST", body: form });
+      state.blockEditor.insertImage(data.asset);
+    } catch (error) {
+      setSaveStatus("Erro na imagem", "error");
+      toast(error.message);
+      return;
+    }
+  }
+  toast(`${images.length} imagem${images.length === 1 ? " inserida" : "s inseridas"}`);
+}
+
+function applyTheme(theme) {
+  const selected = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = selected;
+  localStorage.setItem("agendaDev.theme", selected);
+  const button = $("#btn-theme");
+  button.textContent = selected === "dark" ? "☀" : "☾";
+  button.title = selected === "dark" ? "Usar modo claro" : "Usar modo escuro";
+  button.setAttribute("aria-label", button.title);
+}
+
+function toggleTheme() {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 }
 
 const commandActions = [
@@ -694,6 +730,12 @@ function bindEvents() {
   ["#ed-importance", "#ed-parent"].forEach((selector) => $(selector).addEventListener("change", markEditorDirty));
   $("#block-undo").addEventListener("click", () => state.blockEditor.undo());
   $("#block-redo").addEventListener("click", () => state.blockEditor.redo());
+  $("#block-image").addEventListener("click", () => $("#block-image-file").click());
+  $("#block-image-file").addEventListener("change", (event) => {
+    uploadImages(event.target.files);
+    event.target.value = "";
+  });
+  $("#btn-theme").addEventListener("click", toggleTheme);
   $("#ed-pin").addEventListener("click", () => {
     const on = $("#ed-pin").dataset.pinned !== "1";
     $("#ed-pin").dataset.pinned = on ? "1" : "0";
@@ -896,6 +938,7 @@ async function openReport() {
 }
 
 initBlockEditor();
+applyTheme(document.documentElement.dataset.theme);
 applySidebarPreferences();
 bindEvents();
 bindSidebarResize();

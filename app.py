@@ -11,6 +11,7 @@ from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.serving import make_server
 import webview
 
+from asset_store import AssetError
 from exporters import export_note
 from parser import parse_txt, parse_txt_file
 from reports import generate_html_report, generate_txt_report
@@ -20,6 +21,7 @@ from storage import (
     create_section,
     delete_note,
     export_backup_folder,
+    get_asset_store,
     get_note,
     import_parsed_notes,
     import_txt_folder,
@@ -61,6 +63,11 @@ desktop_window = None
 def no_cache(resp):
     resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+@app.errorhandler(413)
+def file_too_large(_error):
+    return jsonify({"error": "A imagem excede o limite de 8 MB"}), 413
 
 
 @app.route("/")
@@ -112,6 +119,34 @@ def api_delete_note(note_id):
     if not delete_note(note_id):
         return jsonify({"error": "Nota nao encontrada"}), 404
     return jsonify({"ok": True})
+
+
+@app.route("/api/assets", methods=["POST"])
+def api_create_asset():
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify({"error": "Escolha uma imagem"}), 400
+    if not (uploaded.mimetype or "").startswith("image/"):
+        return jsonify({"error": "Somente imagens podem ser inseridas na nota"}), 400
+    try:
+        asset = get_asset_store().store_bytes(
+            uploaded.read(),
+            filename=uploaded.filename,
+            mime_type=uploaded.mimetype,
+        )
+    except AssetError as error:
+        return jsonify({"error": str(error)}), 400
+    asset["url"] = f"/api/assets/{asset['id']}"
+    return jsonify({"asset": asset}), 201
+
+
+@app.route("/api/assets/<asset_id>")
+def api_asset(asset_id):
+    try:
+        path, mime = get_asset_store().find(asset_id)
+    except AssetError as error:
+        return jsonify({"error": str(error)}), 404
+    return send_file(path, mimetype=mime, conditional=True)
 
 
 @app.route("/api/notebooks")

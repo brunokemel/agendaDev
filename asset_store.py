@@ -1,6 +1,7 @@
 """Content-addressed local storage for document and board assets."""
 
 import mimetypes
+import re
 from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
@@ -14,6 +15,8 @@ ALLOWED_MIME_TYPES = {
     "image/gif": ".gif",
     "application/pdf": ".pdf",
 }
+EXTENSION_MIME_TYPES = {extension: mime for mime, extension in ALLOWED_MIME_TYPES.items()}
+ASSET_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class AssetError(ValueError):
@@ -67,6 +70,21 @@ class AssetStore:
         if candidate != root and root not in candidate.parents:
             raise AssetError("Caminho de asset invalido")
         return candidate
+
+    def find(self, asset_id):
+        """Resolve a content-addressed asset by its public SHA-256 ID."""
+        asset_id = str(asset_id or "").lower()
+        if not ASSET_ID_PATTERN.fullmatch(asset_id):
+            raise AssetError("Identificador de asset invalido")
+        directory = self.root / asset_id[:2]
+        matches = [path for path in directory.glob(f"{asset_id}.*") if path.is_file()]
+        if len(matches) != 1 or matches[0].suffix.lower() not in EXTENSION_MIME_TYPES:
+            raise AssetError("Asset nao encontrado")
+        path = matches[0].resolve()
+        root = self.root.resolve()
+        if root not in path.parents:
+            raise AssetError("Caminho de asset invalido")
+        return path, EXTENSION_MIME_TYPES[path.suffix.lower()]
 
 
 def _matches_signature(data, mime):

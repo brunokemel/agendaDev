@@ -36,6 +36,17 @@ class AssetStoreTest(unittest.TestCase):
         with self.assertRaises(AssetError):
             self.store.resolve("../fora.png")
 
+    def test_find_resolves_only_valid_content_id(self):
+        stored = self.store.store_bytes(b"\x89PNG\r\n\x1a\nimg", "foto.png", "image/png")
+        path, mime = self.store.find(stored["id"])
+
+        self.assertEqual(path.read_bytes(), b"\x89PNG\r\n\x1a\nimg")
+        self.assertEqual(mime, "image/png")
+        with self.assertRaises(AssetError):
+            self.store.find("../foto")
+        with self.assertRaises(AssetError):
+            self.store.find("0" * 64)
+
 
 if __name__ == "__main__":
     unittest.main()

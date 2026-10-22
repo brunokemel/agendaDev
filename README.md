@@ -133,6 +133,8 @@ A barra lateral organiza paginas por caderno e secao, mostra recentes e favorito
 
 O editor usa blocos de texto, títulos, listas, checklist, citação e divisor. Digite `/` em um bloco vazio para escolher o tipo, use os controles laterais para reordenar e `Ctrl+Z`/`Ctrl+Y` para desfazer ou refazer. As alterações são salvas automaticamente e o estado aparece no topo do editor.
 
+Imagens podem ser coladas com `Ctrl+V`, arrastadas para o editor ou escolhidas pelo botão **Imagem**. PNG, JPEG, WebP e GIF de até 8 MB são validados, deduplicados e armazenados somente na pasta local `data/assets`. O botão de lua/sol na barra roxa alterna entre os temas claro e escuro e guarda a preferência neste computador.
+
 ## Testes
 
 Execute os testes automatizados com:

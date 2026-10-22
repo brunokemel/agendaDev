@@ -9,6 +9,7 @@
     checklist: { label: "Checklist", placeholder: "Tarefa" },
     quote: { label: "Citacao", placeholder: "Citacao" },
     divider: { label: "Divisor", placeholder: "" },
+    image: { label: "Imagem", placeholder: "Adicione uma legenda" },
   };
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -19,12 +20,14 @@
       this.root = root;
       this.menu = menu;
       this.onChange = options.onChange || (() => {});
+      this.onImageFiles = options.onImageFiles || (() => {});
       this.blocks = [];
       this.history = [];
       this.historyIndex = -1;
       this.draggedId = null;
       this.dropPosition = "before";
       this.menuBlockId = null;
+      this.activeBlockId = null;
       this.silent = false;
       this.bind();
     }
@@ -36,13 +39,23 @@
         if (seen.has(id)) id = blockId();
         seen.add(id);
         const type = TYPES[block.type] ? block.type : "paragraph";
-        return { id, type, text: String(block.text || ""), ...(type === "checklist" ? { checked: Boolean(block.checked) } : {}) };
+        const normalizedBlock = { id, type, text: String(block.text || ""), ...(type === "checklist" ? { checked: Boolean(block.checked) } : {}) };
+        if (type === "image" && block.asset && typeof block.asset === "object") {
+          normalizedBlock.asset = {
+            id: String(block.asset.id || ""),
+            mime: String(block.asset.mime || ""),
+            filename: String(block.asset.filename || "imagem"),
+            size: Number(block.asset.size || 0),
+          };
+        }
+        return normalizedBlock;
       });
       return normalized.length ? normalized : [{ id: blockId(), type: "paragraph", text: "" }];
     }
 
     setBlocks(blocks) {
       this.blocks = this.normalize(blocks);
+      this.activeBlockId = this.blocks[0]?.id || null;
       this.history = [clone(this.blocks)];
       this.historyIndex = 0;
       this.render();
@@ -56,6 +69,7 @@
     plainText() {
       return this.getBlocks().map((block, index) => {
         if (block.type === "divider") return "---";
+        if (block.type === "image") return `[Imagem: ${(block.asset && block.asset.filename) || "imagem"}]${block.text ? ` ${block.text}` : ""}`;
         if (block.type === "checklist") return `[${block.checked ? "x" : " "}] ${block.text}`;
         if (block.type === "bulleted_list") return `- ${block.text}`;
         if (block.type === "numbered_list") return `${index + 1}. ${block.text}`;
@@ -69,6 +83,26 @@
       else this.blocks.push({ id: blockId(), type: "paragraph", text });
       this.commit();
       this.focusBlock(this.blocks[this.blocks.length - 1].id, true);
+    }
+
+    insertImage(asset) {
+      if (!asset || !asset.id) return;
+      const image = {
+        id: blockId(),
+        type: "image",
+        text: "",
+        asset: {
+          id: String(asset.id),
+          mime: String(asset.mime || ""),
+          filename: String(asset.filename || "imagem"),
+          size: Number(asset.size || 0),
+        },
+      };
+      const activeIndex = this.activeBlockId ? this.blocks.findIndex((block) => block.id === this.activeBlockId) : -1;
+      const index = activeIndex >= 0 ? activeIndex + 1 : this.blocks.length;
+      this.blocks.splice(Math.max(0, index), 0, image);
+      this.commit();
+      this.focusBlock(image.id);
     }
 
     replaceText(search, replacement) {
@@ -93,6 +127,18 @@
         this.syncFromDom();
         this.record();
       });
+      this.root.addEventListener("paste", (event) => {
+        let files = [...(event.clipboardData?.files || [])];
+        if (!files.length) files = [...(event.clipboardData?.items || [])].filter((item) => item.kind === "file").map((item) => item.getAsFile()).filter(Boolean);
+        files = files.filter((file) => file.type.startsWith("image/"));
+        if (!files.length) return;
+        event.preventDefault();
+        this.onImageFiles(files);
+      });
+      this.root.addEventListener("focusin", (event) => {
+        const row = event.target.closest(".block-row");
+        if (row) this.activeBlockId = row.dataset.id;
+      });
       this.root.addEventListener("click", (event) => {
         const action = event.target.closest("[data-block-action]");
         if (!action) return;
@@ -112,6 +158,10 @@
       });
       this.root.addEventListener("dragover", (event) => {
         event.preventDefault();
+        if (event.dataTransfer?.files?.length) {
+          this.root.classList.add("block-image-drop");
+          return;
+        }
         const row = event.target.closest(".block-row");
         this.root.querySelectorAll(".drop-before, .drop-after").forEach((item) => item.classList.remove("drop-before", "drop-after"));
         if (!row || row.dataset.id === this.draggedId) return;
@@ -121,6 +171,14 @@
       });
       this.root.addEventListener("drop", (event) => {
         event.preventDefault();
+        this.root.classList.remove("block-image-drop");
+        const imageFiles = [...(event.dataTransfer?.files || [])].filter((file) => file.type.startsWith("image/"));
+        if (imageFiles.length) {
+          const target = event.target.closest(".block-row");
+          if (target) this.activeBlockId = target.dataset.id;
+          this.onImageFiles(imageFiles);
+          return;
+        }
         const target = event.target.closest(".block-row");
         if (!target || !this.draggedId || target.dataset.id === this.draggedId) return;
         const from = this.blocks.findIndex((block) => block.id === this.draggedId);
@@ -135,6 +193,9 @@
       this.root.addEventListener("dragend", () => {
         this.draggedId = null;
         this.root.querySelectorAll(".dragging, .drop-before, .drop-after").forEach((row) => row.classList.remove("dragging", "drop-before", "drop-after"));
+      });
+      this.root.addEventListener("dragleave", (event) => {
+        if (!this.root.contains(event.relatedTarget)) this.root.classList.remove("block-image-drop");
       });
       this.menu.addEventListener("click", (event) => {
         const option = event.target.closest("[data-block-type]");
@@ -244,8 +305,10 @@
     }
 
     removeBlock(id) {
+      const index = this.blocks.findIndex((block) => block.id === id);
       if (this.blocks.length === 1) this.blocks[0] = { id: blockId(), type: "paragraph", text: "" };
       else this.blocks = this.blocks.filter((block) => block.id !== id);
+      this.activeBlockId = this.blocks[Math.max(0, index - 1)]?.id || this.blocks[0]?.id || null;
       this.commit();
     }
 
@@ -273,7 +336,7 @@
     openMenu(id, filter) {
       this.menuBlockId = id;
       const needle = String(filter || "").toLocaleLowerCase("pt-BR");
-      const options = Object.entries(TYPES).filter(([, config]) => config.label.toLocaleLowerCase("pt-BR").includes(needle));
+      const options = Object.entries(TYPES).filter(([type, config]) => type !== "image" && config.label.toLocaleLowerCase("pt-BR").includes(needle));
       this.menu.innerHTML = options.map(([type, config], index) => `<button class="${index === 0 ? "selected" : ""}" data-block-type="${type}"><b>${config.label}</b><span>${TYPES[type].placeholder}</span></button>`).join("");
       const row = this.root.querySelector(`[data-id="${CSS.escape(id)}"]`);
       if (row) {
@@ -293,6 +356,7 @@
         const input = this.root.querySelector(`[data-id="${CSS.escape(id)}"] .block-input`);
         if (!input) return;
         input.focus();
+        this.activeBlockId = id;
         if (end) {
           const range = document.createRange();
           range.selectNodeContents(input);
@@ -311,7 +375,14 @@
         const config = TYPES[block.type];
         numbered = block.type === "numbered_list" ? numbered + 1 : 0;
         const marker = block.type === "bulleted_list" ? '<span class="block-marker">•</span>' : block.type === "numbered_list" ? `<span class="block-marker">${numbered}.</span>` : block.type === "checklist" ? `<input class="block-check" type="checkbox" ${block.checked ? "checked" : ""}>` : "";
-        const body = block.type === "divider" ? '<div class="block-divider" contenteditable="false"><hr></div>' : `${marker}<div class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div>`;
+        let body;
+        if (block.type === "divider") {
+          body = '<div class="block-divider" contenteditable="false"><hr></div>';
+        } else if (block.type === "image" && block.asset && block.asset.id) {
+          body = `<figure class="block-image-figure"><img src="/api/assets/${this.escape(block.asset.id)}" alt="${this.escape(block.text || block.asset.filename)}" loading="lazy"><figcaption class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</figcaption></figure>`;
+        } else {
+          body = `${marker}<div class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div>`;
+        }
         return `<div class="block-row type-${block.type}" data-id="${block.id}"><div class="block-controls"><button type="button" class="block-grip" draggable="true" title="Arraste para mover esta frase" aria-label="Arraste para mover esta frase">⠿</button><button type="button" data-block-action="delete" title="Excluir bloco">×</button></div><div class="block-content">${body}</div></div>`;
       }).join("");
       this.silent = false;
