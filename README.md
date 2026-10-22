@@ -131,6 +131,8 @@ Niveis de importancia aceitos: `urgente`, `alta`, `media` e `baixa`. Tambem sao 
 
 A barra lateral organiza paginas por caderno e secao, mostra recentes e favoritos e pode ser recolhida ou redimensionada. No editor, **Pagina mae** cria uma hierarquia de subpaginas; alterar Caderno ou Secao move a pagina.
 
+O editor usa blocos de texto, títulos, listas, checklist, citação e divisor. Digite `/` em um bloco vazio para escolher o tipo, use os controles laterais para reordenar e `Ctrl+Z`/`Ctrl+Y` para desfazer ou refazer. As alterações são salvas automaticamente e o estado aparece no topo do editor.
+
 ## Testes
 
 Execute os testes automatizados com:

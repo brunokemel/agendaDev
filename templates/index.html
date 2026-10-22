@@ -49,10 +49,7 @@
           <nav class="page-shortcuts" id="favorite-list"></nav>
         </section>
         <section class="sidebar-group notebooks-group">
-          <div class="sidebar-group-head">
-            <h2>Cadernos</h2>
-            <button class="sidebar-notes-toggle" id="btn-toggle-page-tree" title="Recolher paginas" aria-label="Recolher paginas" aria-expanded="true">−</button>
-          </div>
+          <h2>Cadernos</h2>
           <nav class="nb-list" id="notebook-list"></nav>
         </section>
       </div>
@@ -113,6 +110,7 @@
             </div>
           </div>
           <button class="icon-btn danger" id="ed-delete" title="Excluir">Excluir</button>
+          <span class="save-status" id="save-status" aria-live="polite">Salvo</span>
           <button class="btn primary" id="ed-save">Salvar</button>
         </div>
       </header>
@@ -142,7 +140,16 @@
         </label>
       </div>
       <div class="editor-body">
-        <textarea id="ed-content" placeholder="Escreva sua nota. Cole links ou e-mails e gerencie-os ao lado."></textarea>
+        <div class="block-editor-wrap">
+          <div class="block-toolbar" aria-label="Ferramentas do editor">
+            <button type="button" id="block-undo" title="Desfazer (Ctrl+Z)">↶</button>
+            <button type="button" id="block-redo" title="Refazer (Ctrl+Y)">↷</button>
+            <span>Digite <kbd>/</kbd> para adicionar blocos</span>
+          </div>
+          <div class="block-editor" id="block-editor"></div>
+          <div class="slash-menu hidden" id="slash-menu"></div>
+          <textarea id="ed-content" class="legacy-content" aria-hidden="true" tabindex="-1"></textarea>
+        </div>
         <aside class="links-col">
           <div class="links-head">
             <div>
@@ -229,6 +236,7 @@
   </div>
 
   <div class="toast hidden" id="toast"></div>
+  <script src="/static/js/block-editor.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 </html>

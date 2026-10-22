@@ -8,7 +8,12 @@ const state = {
   sectionId: "",
   editingId: null,
   recentIds: JSON.parse(localStorage.getItem("agendaDev.recentIds") || "[]"),
-  pageTreeCollapsed: localStorage.getItem("agendaDev.pageTreeCollapsed") === "1",
+  collapsedNotebooks: JSON.parse(localStorage.getItem("agendaDev.collapsedNotebooks") || "[]"),
+  blockEditor: null,
+  editorDirty: false,
+  autosaveTimer: null,
+  saveInFlight: null,
+  editorVersion: 0,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -110,17 +115,24 @@ function renderNotebooks() {
   let html = `<button class="all-item ${allActive}" data-nb="">Todas as paginas</button>`;
   state.notebooks.forEach((nb) => {
     const open = state.notebookId === nb.id;
+    const collapsed = state.collapsedNotebooks.includes(nb.id);
     html += `<div class="nb-item">
-      <button class="nb-head ${open && !state.sectionId ? "active" : ""}" data-nb="${nb.id}">
-        <span class="nb-dot" style="background:${nb.color || "#7719aa"}"></span>
-        <span>${escapeHtml(nb.name)}</span>
-        <span class="nb-count">${counts[nb.id] || 0}</span>
-      </button>`;
-    (nb.sections || []).forEach((sec) => {
-      html += `<button class="sec-item ${state.sectionId === sec.id ? "active" : ""}" data-nb="${nb.id}" data-sec="${sec.id}">${escapeHtml(sec.name)}</button>`;
-      html += renderPageTree(state.allNotes.filter((n) => n.section_id === sec.id));
-    });
-    html += `<button class="add-sec" data-add-sec="${nb.id}">+ Secao</button></div>`;
+      <div class="nb-row">
+        <button class="nb-head ${open && !state.sectionId ? "active" : ""}" data-nb="${nb.id}">
+          <span class="nb-dot" style="background:${nb.color || "#7719aa"}"></span>
+          <span>${escapeHtml(nb.name)}</span>
+          <span class="nb-count">${counts[nb.id] || 0}</span>
+        </button>
+        <button class="nb-toggle" data-toggle-nb="${nb.id}" title="${collapsed ? "Expandir" : "Recolher"} ${escapeHtml(nb.name)}" aria-label="${collapsed ? "Expandir" : "Recolher"} ${escapeHtml(nb.name)}" aria-expanded="${collapsed ? "false" : "true"}">${collapsed ? "+" : "−"}</button>
+      </div>`;
+    if (!collapsed) {
+      (nb.sections || []).forEach((sec) => {
+        html += `<button class="sec-item ${state.sectionId === sec.id ? "active" : ""}" data-nb="${nb.id}" data-sec="${sec.id}">${escapeHtml(sec.name)}</button>`;
+        html += renderPageTree(state.allNotes.filter((n) => n.section_id === sec.id));
+      });
+      html += `<button class="add-sec" data-add-sec="${nb.id}">+ Secao</button>`;
+    }
+    html += `</div>`;
   });
   renderShortcuts();
   list.innerHTML = html;
@@ -144,6 +156,15 @@ function renderNotebooks() {
       loadAll();
     });
   });
+  list.querySelectorAll("[data-toggle-nb]").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const id = button.dataset.toggleNb;
+    state.collapsedNotebooks = state.collapsedNotebooks.includes(id)
+      ? state.collapsedNotebooks.filter((item) => item !== id)
+      : [...state.collapsedNotebooks, id];
+    localStorage.setItem("agendaDev.collapsedNotebooks", JSON.stringify(state.collapsedNotebooks));
+    renderNotebooks();
+  }));
   list.querySelectorAll("[data-page]").forEach((btn) => btn.addEventListener("click", (event) => {
     event.stopPropagation();
     openEditor(btn.dataset.page);
@@ -152,7 +173,6 @@ function renderNotebooks() {
 }
 
 function renderPageTree(notes) {
-  if (state.pageTreeCollapsed) return "";
   const ids = new Set(notes.map((note) => note.id));
   const children = new Map();
   notes.forEach((note) => {
@@ -319,14 +339,36 @@ function fillParentPages() {
 function openDrawer() {
   $("#editor").classList.remove("hidden");
 }
-function closeDrawer() {
+async function closeDrawer() {
+  try {
+    await flushAutosave();
+  } catch (_) {
+    toast("Nao foi possivel salvar. O editor continuara aberto.");
+    return;
+  }
   $("#editor").classList.add("hidden");
   state.editingId = null;
   renderBreadcrumbs();
 }
 
 function setPreview() {
+  if (state.blockEditor) $("#ed-content").value = state.blockEditor.plainText();
   renderLinkEditor();
+}
+
+function renderBlockPreview(blocks) {
+  return (blocks || []).map((block) => {
+    const text = linkify(block.text || "");
+    if (block.type === "heading_1") return `<h1>${text}</h1>`;
+    if (block.type === "heading_2") return `<h2>${text}</h2>`;
+    if (block.type === "heading_3") return `<h3>${text}</h3>`;
+    if (block.type === "bulleted_list") return `<div>• ${text}</div>`;
+    if (block.type === "numbered_list") return `<div>${text}</div>`;
+    if (block.type === "checklist") return `<div>${block.checked ? "☑" : "☐"} ${text}</div>`;
+    if (block.type === "quote") return `<blockquote>${text}</blockquote>`;
+    if (block.type === "divider") return "<hr>";
+    return `<p>${text || "<br>"}</p>`;
+  }).join("");
 }
 
 function editableLinks(content) {
@@ -372,21 +414,17 @@ function renderLinkEditor() {
       const url = row.querySelector(".link-url").value.trim();
       if (!url) return;
       const replacement = label && label !== url ? `[${label}](${url})` : url.replace(/^mailto:/, "");
-      const editor = $("#ed-content");
-      editor.value = editor.value.replace(link.raw, replacement);
-      setPreview();
+      state.blockEditor.replaceText(link.raw, replacement);
     }));
     row.querySelector(".link-remove").addEventListener("click", () => {
-      const editor = $("#ed-content");
-      editor.value = editor.value.replace(link.raw, "");
-      setPreview();
+      state.blockEditor.replaceText(link.raw, "");
     });
   });
 }
 
 function openPreview() {
   $("#preview-title").textContent = $("#ed-title").value.trim() || "Sem titulo";
-  $("#ed-preview").innerHTML = linkify($("#ed-content").value);
+  $("#ed-preview").innerHTML = renderBlockPreview(state.blockEditor.getBlocks());
   $("#preview-modal").classList.remove("hidden");
 }
 
@@ -396,6 +434,7 @@ async function openEditor(id) {
     state.editingId = null;
     $("#ed-title").value = "";
     $("#ed-content").value = "";
+    state.blockEditor.setBlocks([]);
     $("#ed-importance").value = "media";
     $("#ed-tags").value = "";
     $("#ed-due").value = "";
@@ -408,6 +447,9 @@ async function openEditor(id) {
     if (state.sectionId) $("#ed-section").value = state.sectionId;
     fillParentPages();
     $("#ed-parent").value = "";
+    setSaveStatus("Salvo");
+    state.editorDirty = false;
+    state.editorVersion = 0;
     setPreview();
     openDrawer();
     $("#ed-title").focus();
@@ -419,6 +461,7 @@ async function openEditor(id) {
   rememberRecent(n.id);
   $("#ed-title").value = n.title || "";
   $("#ed-content").value = n.content || "";
+  state.blockEditor.setBlocks(n.blocks || [{ type: "paragraph", text: n.content || "" }]);
   $("#ed-importance").value = n.importance || "media";
   $("#ed-tags").value = (n.tags || []).join(", ");
   $("#ed-due").value = (n.due || "").slice(0, 10);
@@ -431,6 +474,9 @@ async function openEditor(id) {
   $("#ed-section").value = n.section_id || "";
   fillParentPages();
   $("#ed-parent").value = n.parent_id || "";
+  setSaveStatus("Salvo");
+  state.editorDirty = false;
+  state.editorVersion = 0;
   setPreview();
   openDrawer();
   renderBreadcrumbs(n);
@@ -442,7 +488,8 @@ function gatherNote() {
   return {
     id: state.editingId,
     title: $("#ed-title").value.trim() || "Sem titulo",
-    content: $("#ed-content").value,
+    content: state.blockEditor.plainText(),
+    blocks: state.blockEditor.getBlocks(),
     importance: $("#ed-importance").value,
     tags: $("#ed-tags").value.split(/[,;]/).map((t) => t.trim()).filter(Boolean),
     notebook_id: $("#ed-notebook").value,
@@ -456,18 +503,74 @@ function gatherNote() {
   };
 }
 
-async function saveNote() {
+function setSaveStatus(text, kind = "") {
+  const status = $("#save-status");
+  status.textContent = text;
+  status.className = `save-status ${kind}`.trim();
+}
+
+function markEditorDirty() {
+  if ($("#editor").classList.contains("hidden")) return;
+  state.editorDirty = true;
+  state.editorVersion += 1;
+  setSaveStatus("Nao salvo");
+  clearTimeout(state.autosaveTimer);
+  state.autosaveTimer = setTimeout(() => saveNote({ silent: true }).catch(() => {}), 900);
+}
+
+async function flushAutosave() {
+  clearTimeout(state.autosaveTimer);
+  if (state.editorDirty) await saveNote({ silent: true });
+}
+
+async function saveNote({ silent = false } = {}) {
+  if (state.saveInFlight) await state.saveInFlight;
   const payload = gatherNote();
-  if (payload.id) {
-    await api(`/api/notes/${payload.id}`, { method: "PUT", body: JSON.stringify(payload) });
-    toast("Pagina salva");
-  } else {
-    const data = await api("/api/notes", { method: "POST", body: JSON.stringify(payload) });
-    state.editingId = data.note.id;
-    toast("Pagina criada");
-  }
-  await loadAll();
-  rememberRecent(state.editingId);
+  const savingVersion = state.editorVersion;
+  const meaningful = payload.title !== "Sem titulo" || payload.blocks.some((block) => block.text.trim() || block.type === "divider");
+  if (!payload.id && !meaningful) return;
+  setSaveStatus("Salvando...", "saving");
+  state.saveInFlight = (async () => {
+    try {
+      if (payload.id) {
+        await api(`/api/notes/${payload.id}`, { method: "PUT", body: JSON.stringify(payload) });
+        if (!silent) toast("Pagina salva");
+      } else {
+        const data = await api("/api/notes", { method: "POST", body: JSON.stringify(payload) });
+        state.editingId = data.note.id;
+        if (!silent) toast("Pagina criada");
+      }
+      if (state.editorVersion === savingVersion) {
+        state.editorDirty = false;
+        setSaveStatus("Salvo");
+      } else {
+        state.editorDirty = true;
+        setSaveStatus("Nao salvo");
+        clearTimeout(state.autosaveTimer);
+        state.autosaveTimer = setTimeout(() => saveNote({ silent: true }).catch(() => {}), 350);
+      }
+      await loadAll();
+      rememberRecent(state.editingId);
+    } catch (error) {
+      state.editorDirty = true;
+      setSaveStatus("Erro ao salvar", "error");
+      if (!silent) toast(error.message);
+      throw error;
+    } finally {
+      state.saveInFlight = null;
+    }
+  })();
+  return state.saveInFlight;
+}
+
+function initBlockEditor() {
+  state.blockEditor = new window.AgendaBlockEditor($("#block-editor"), $("#slash-menu"), {
+    onChange: () => {
+      setPreview();
+      markEditorDirty();
+    },
+  });
+  state.blockEditor.setBlocks([]);
 }
 
 const commandActions = [
@@ -526,22 +629,6 @@ function applySidebarPreferences() {
   const width = Math.max(220, Math.min(420, Number(localStorage.getItem("agendaDev.sidebarWidth")) || 260));
   document.documentElement.style.setProperty("--sidebar", `${width}px`);
   if (localStorage.getItem("agendaDev.sidebarCollapsed") === "1") $("#app").classList.add("sidebar-collapsed");
-  updatePageTreeToggle();
-}
-
-function updatePageTreeToggle() {
-  const button = $("#btn-toggle-page-tree");
-  button.textContent = state.pageTreeCollapsed ? "+" : "−";
-  button.title = state.pageTreeCollapsed ? "Mostrar paginas" : "Recolher paginas";
-  button.setAttribute("aria-label", button.title);
-  button.setAttribute("aria-expanded", state.pageTreeCollapsed ? "false" : "true");
-}
-
-function togglePageTree() {
-  state.pageTreeCollapsed = !state.pageTreeCollapsed;
-  localStorage.setItem("agendaDev.pageTreeCollapsed", state.pageTreeCollapsed ? "1" : "0");
-  updatePageTreeToggle();
-  renderNotebooks();
 }
 
 function bindSidebarResize() {
@@ -594,25 +681,36 @@ function bindEvents() {
   $("#btn-new-note").addEventListener("click", () => openEditor(null));
   $("#editor-close").addEventListener("click", closeDrawer);
   $("#ed-save").addEventListener("click", saveNote);
-  $("#ed-content").addEventListener("input", setPreview);
   $("#ed-notebook").addEventListener("change", () => {
     fillEditorSections();
     fillParentPages();
+    markEditorDirty();
   });
-  $("#ed-section").addEventListener("change", fillParentPages);
+  $("#ed-section").addEventListener("change", () => {
+    fillParentPages();
+    markEditorDirty();
+  });
+  ["#ed-title", "#ed-tags", "#ed-due"].forEach((selector) => $(selector).addEventListener("input", markEditorDirty));
+  ["#ed-importance", "#ed-parent"].forEach((selector) => $(selector).addEventListener("change", markEditorDirty));
+  $("#block-undo").addEventListener("click", () => state.blockEditor.undo());
+  $("#block-redo").addEventListener("click", () => state.blockEditor.redo());
   $("#ed-pin").addEventListener("click", () => {
     const on = $("#ed-pin").dataset.pinned !== "1";
     $("#ed-pin").dataset.pinned = on ? "1" : "0";
     $("#ed-pin").textContent = on ? "Fixada" : "Fixar";
+    markEditorDirty();
   });
   $("#ed-favorite").addEventListener("click", () => {
     const on = $("#ed-favorite").dataset.favorite !== "1";
     $("#ed-favorite").dataset.favorite = on ? "1" : "0";
     $("#ed-favorite").textContent = on ? "★ Favorita" : "☆ Favorito";
+    markEditorDirty();
   });
   $("#ed-delete").addEventListener("click", async () => {
     if (!state.editingId) return closeDrawer();
     if (!confirm("Excluir esta pagina?")) return;
+    clearTimeout(state.autosaveTimer);
+    state.editorDirty = false;
     await api(`/api/notes/${state.editingId}`, { method: "DELETE" });
     closeDrawer();
     toast("Pagina excluida");
@@ -621,13 +719,11 @@ function bindEvents() {
   $("#ed-preview-btn").addEventListener("click", openPreview);
   $("#preview-close").addEventListener("click", () => $("#preview-modal").classList.add("hidden"));
   $("#ed-add-link").addEventListener("click", () => {
-    const editor = $("#ed-content");
     const url = prompt("Endereco do link:");
     if (!url) return;
     const label = prompt("Texto exibido (opcional):");
     const normalized = /^(https?:\/\/|mailto:)/i.test(url) ? url : `https://${url}`;
-    editor.value += `${editor.value && !editor.value.endsWith("\n") ? "\n" : ""}${label ? `[${label}](${normalized})` : normalized}`;
-    setPreview();
+    state.blockEditor.appendText(label ? `[${label}](${normalized})` : normalized);
   });
   $("#ed-export").addEventListener("click", () => {
     if (!state.editingId) return toast("Salve a pagina primeiro");
@@ -683,7 +779,6 @@ function bindEvents() {
   $("#btn-toggle-sidebar").addEventListener("click", toggleSidebar);
   $("#btn-collapse-sidebar").addEventListener("click", toggleSidebar);
   $("#btn-command").addEventListener("click", openCommandPalette);
-  $("#btn-toggle-page-tree").addEventListener("click", togglePageTree);
   $("#command-input").addEventListener("input", (event) => renderCommandResults(event.target.value));
   $("#command-input").addEventListener("keydown", (event) => {
     const buttons = $$("#command-results .command-result");
@@ -800,6 +895,7 @@ async function openReport() {
   $("#report-modal").classList.remove("hidden");
 }
 
+initBlockEditor();
 applySidebarPreferences();
 bindEvents();
 bindSidebarResize();

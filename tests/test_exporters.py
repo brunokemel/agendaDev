@@ -41,6 +41,25 @@ class ExporterTest(unittest.TestCase):
         self.assertEqual(filename, "Reunião Produto.pdf")
         self.assertEqual(mimetype, "application/pdf")
 
+    def test_exports_document_built_only_from_blocks(self):
+        note = {
+            "title": "Editor em blocos",
+            "blocks": [
+                {"id": "h", "type": "heading_1", "text": "Resumo"},
+                {"id": "c", "type": "checklist", "text": "Validar exportacao", "checked": True},
+            ],
+        }
+
+        txt, _, _ = export_note(note, "txt")
+        docx, _, _ = export_note(note, "docx")
+        pdf, _, _ = export_note(note, "pdf")
+
+        self.assertIn("Resumo".encode(), txt)
+        self.assertIn(b"[x] Validar exportacao", txt)
+        with zipfile.ZipFile(BytesIO(docx)) as archive:
+            self.assertIn("Validar exportacao", archive.read("word/document.xml").decode("utf-8"))
+        self.assertIn(b"Validar exportacao", pdf)
+
 
 if __name__ == "__main__":
     unittest.main()

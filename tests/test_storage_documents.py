@@ -63,6 +63,23 @@ class StorageDocumentTest(unittest.TestCase):
         self.assertFalse(updated["favorite"])
         self.assertIsNone(updated["parent_id"])
 
+    def test_supported_blocks_round_trip_and_keep_searchable_content(self):
+        blocks = [
+            {"id": "h1", "type": "heading_1", "text": "Plano semanal"},
+            {"id": "p1", "type": "paragraph", "text": "Conteudo pesquisavel"},
+            {"id": "c1", "type": "checklist", "text": "Revisar agenda", "checked": True},
+            {"id": "q1", "type": "quote", "text": "Fazer simples"},
+            {"id": "d1", "type": "divider", "text": ""},
+        ]
+        note = storage.upsert_note({"title": "Blocos MVP", "blocks": blocks})
+
+        loaded = storage.get_note(note["id"])
+        self.assertEqual(loaded["blocks"], blocks)
+        self.assertIn("Plano semanal", loaded["content"])
+        self.assertIn("[x] Revisar agenda", loaded["content"])
+        self.assertIn("---", loaded["content"])
+        self.assertEqual(storage.search_notes("pesquisavel")[0]["id"], note["id"])
+
 
 if __name__ == "__main__":
     unittest.main()
