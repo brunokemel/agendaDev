@@ -87,6 +87,8 @@ Imagens inseridas nas notas podem ser arrastadas entre os blocos, aumentadas ou 
 
 No editor, o botao **Modo livre** transforma a nota em um quadro: clique em um espaco vazio para criar texto naquele ponto; clique no texto para editar ou segure e mova para arrastar; imagens tambem podem ser seguradas diretamente. Use **Organizar** para retornar ao fluxo vertical; as coordenadas ficam guardadas para quando o modo livre for aberto novamente.
 
+Na lateral **Links da nota**, use **+ Link** para informar o endereco e um nome de exibicao (mascara). Por exemplo, `https://exemplo.com/manual` pode aparecer no texto apenas como `Manual`. Use **Ctrl + clique** sobre o nome para abrir o endereco no navegador.
+
 ## Backup completo e restauracao
 
 No aplicativo instalado, abra **Relatorios** e use **Exportar backup completo**. Escolha uma pasta de destino; o aplicativo criara nela uma subpasta com data e hora contendo notas, cadernos, assets, o registro de importacoes e os arquivos de `entrada_txt`. O manifesto do backup inclui hashes para detectar arquivos alterados ou corrompidos.

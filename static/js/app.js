@@ -427,8 +427,8 @@ function renderLinkEditor() {
     <div class="link-row" data-index="${index}">
       <a class="link-open" href="${escapeHtml(link.url)}" target="_blank" rel="noopener" title="Abrir link">Abrir</a>
       <div class="link-fields">
-        <input class="link-label" value="${escapeHtml(link.label)}" aria-label="Texto do link">
-        <input class="link-url" value="${escapeHtml(link.url)}" aria-label="Endereco do link">
+        <input class="link-label" value="${escapeHtml(link.label)}" placeholder="Nome exibido (máscara)" title="Nome exibido (máscara)" aria-label="Nome exibido ou máscara do link">
+        <input class="link-url" value="${escapeHtml(link.url)}" placeholder="Endereço do link" title="Endereço real do link" aria-label="Endereco do link">
       </div>
       <button class="icon-btn link-remove" title="Remover link">✕</button>
     </div>`).join("");
@@ -445,6 +445,46 @@ function renderLinkEditor() {
       state.blockEditor.replaceText(link.raw, "");
     });
   });
+}
+
+function updateLinkMaskPreview() {
+  const label = $("#link-label").value.trim();
+  const url = $("#link-url").value.trim();
+  $("#link-mask-preview").innerHTML = label
+    ? `Aparecerá como: <strong>${escapeHtml(label)}</strong>`
+    : url
+      ? `Aparecerá como: <strong>${escapeHtml(url)}</strong>`
+      : "O link aparecerá com o endereço completo.";
+}
+
+function openLinkModal() {
+  $("#link-url").value = "";
+  $("#link-label").value = "";
+  updateLinkMaskPreview();
+  $("#link-modal").classList.remove("hidden");
+  setTimeout(() => $("#link-url").focus(), 0);
+}
+
+function closeLinkModal() {
+  $("#link-modal").classList.add("hidden");
+}
+
+function addMaskedLink() {
+  const rawUrl = $("#link-url").value.trim();
+  const label = $("#link-label").value.trim().replace(/[\[\]]/g, "");
+  if (!rawUrl) return toast("Informe o endereco do link");
+  const normalized = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+  let parsed;
+  try {
+    parsed = new URL(normalized);
+  } catch (_) {
+    return toast("Endereco de link invalido");
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) return toast("Use um link HTTP ou HTTPS");
+  const link = label ? `[${label}](${parsed.href})` : parsed.href;
+  state.blockEditor.appendText(link);
+  closeLinkModal();
+  toast(label ? `Link exibido como “${label}”` : "Link adicionado");
 }
 
 function openPreview() {
@@ -791,12 +831,15 @@ function bindEvents() {
   });
   $("#ed-preview-btn").addEventListener("click", openPreview);
   $("#preview-close").addEventListener("click", () => $("#preview-modal").classList.add("hidden"));
-  $("#ed-add-link").addEventListener("click", () => {
-    const url = prompt("Endereco do link:");
-    if (!url) return;
-    const label = prompt("Texto exibido (opcional):");
-    const normalized = /^(https?:\/\/|mailto:)/i.test(url) ? url : `https://${url}`;
-    state.blockEditor.appendText(label ? `[${label}](${normalized})` : normalized);
+  $("#ed-add-link").addEventListener("click", openLinkModal);
+  $("#link-cancel").addEventListener("click", closeLinkModal);
+  $("#link-add").addEventListener("click", addMaskedLink);
+  $("#link-label").addEventListener("input", updateLinkMaskPreview);
+  $("#link-url").addEventListener("input", updateLinkMaskPreview);
+  $("#link-modal").addEventListener("click", (event) => { if (event.target.id === "link-modal") closeLinkModal(); });
+  $("#link-modal").addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeLinkModal();
+    if (event.key === "Enter") addMaskedLink();
   });
   $("#ed-export").addEventListener("click", () => {
     if (!state.editingId) return toast("Salve a pagina primeiro");

@@ -167,7 +167,7 @@
               <div class="preview-label">Links da nota</div>
               <div class="links-help">Abra, altere ou remova sem sair do editor.</div>
             </div>
-            <button class="icon-btn" id="ed-add-link" title="Adicionar link">+</button>
+            <button class="icon-btn" id="ed-add-link" title="Adicionar link com nome personalizado">+ Link</button>
           </div>
           <div class="links-editor" id="ed-links"></div>
         </aside>
@@ -185,6 +185,24 @@
         <button class="icon-btn" id="preview-close" title="Fechar">✕</button>
       </div>
       <div class="export-preview" id="ed-preview"></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="link-modal">
+    <div class="modal-card link-modal-card">
+      <h2>Adicionar link</h2>
+      <p class="muted">Use um nome curto para esconder o endereço completo no texto.</p>
+      <label>Endereço do link
+        <input id="link-url" type="url" placeholder="https://exemplo.com" autocomplete="url">
+      </label>
+      <label>Nome exibido (máscara)
+        <input id="link-label" placeholder="Ex: Documentação do projeto">
+      </label>
+      <div class="link-mask-preview" id="link-mask-preview">O link aparecerá com o endereço completo.</div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="link-cancel">Cancelar</button>
+        <button class="btn primary" id="link-add">Adicionar link</button>
+      </div>
     </div>
   </div>
 

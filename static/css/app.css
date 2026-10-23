@@ -337,6 +337,11 @@ kbd { border: 1px solid var(--line); border-radius: 3px; background: var(--paper
 .links-col .preview-label { padding: 0; }
 .links-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; margin-bottom: 12px; }
 .links-help { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.link-modal-card { width: min(480px, 92vw); }
+.link-modal-card label { display: grid; gap: 5px; font-size: 12px; color: var(--muted); }
+.link-modal-card input { color: var(--ink); }
+.link-mask-preview { min-height: 34px; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 4px; background: var(--bg); color: var(--muted); font-size: 12px; }
+.link-mask-preview strong { color: var(--mid); }
 .links-editor { display: grid; gap: 8px; }
 .links-empty { color: var(--muted); font-size: 13px; margin: 8px 0; }
 .link-row { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: start; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
