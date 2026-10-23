@@ -653,7 +653,7 @@ function initBlockEditor() {
   $("#shape-menu").addEventListener("click", (event) => {
     const option = event.target.closest("[data-shape]");
     if (!option) return;
-    state.blockEditor.insertShape(option.dataset.shape);
+    state.blockEditor.activateShapeTool(option.dataset.shape);
     $("#shape-menu").classList.add("hidden");
   });
   document.addEventListener("click", (event) => {
@@ -1029,6 +1029,7 @@ function bindEvents() {
       $("#preview-modal").classList.add("hidden");
       $("#link-modal").classList.add("hidden");
       $("#shape-menu").classList.add("hidden");
+      state.blockEditor?.cancelShapeTool();
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
       e.preventDefault();

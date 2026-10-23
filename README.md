@@ -89,7 +89,7 @@ No editor, o botao **Modo livre** transforma a nota em um quadro: clique em um e
 
 Na lateral **Links da nota**, use **+ Link** para informar o endereco e um nome de exibicao (mascara). Por exemplo, `https://exemplo.com/manual` pode aparecer no texto apenas como `Manual`. Use **Ctrl + clique** sobre o nome para abrir o endereco no navegador.
 
-O menu **Formas** adiciona retangulo, losango, triangulo, circulo e seta ao quadro livre. Arraste a forma para mover, edite seu texto e use o ponto no canto inferior direito para redimensionar ou esticar. A divisao entre o editor e o painel de links tambem pode ser arrastada e sua proporcao fica salva neste computador.
+No menu **Formas**, escolha retangulo, losango, triangulo, circulo ou seta. Depois clique no ponto inicial do quadro e arraste ate o ponto final: a forma acompanha o mouse e nasce no tamanho e no sentido do gesto. Arraste a forma para mover, edite seu texto e use as bolinhas dos cantos ou das extremidades da seta para ajustar. A divisao entre o editor e o painel de links tambem pode ser arrastada e sua proporcao fica salva neste computador.
 
 ## Backup completo e restauracao
 

@@ -33,6 +33,8 @@
       this.dragOffset = { x: 0, y: 0 };
       this.pointerDrag = null;
       this.shapeResize = null;
+      this.pendingShape = null;
+      this.shapeDraw = null;
       this.dropPosition = "before";
       this.menuBlockId = null;
       this.activeBlockId = null;
@@ -75,7 +77,12 @@
         }
         if (type === "shape") {
           const shape = block.shape && typeof block.shape === "object" ? block.shape : {};
-          normalizedBlock.shape = { kind: ["rectangle", "diamond", "triangle", "circle", "arrow"].includes(shape.kind) ? shape.kind : "rectangle" };
+          normalizedBlock.shape = {
+            kind: ["rectangle", "diamond", "triangle", "circle", "arrow"].includes(shape.kind) ? shape.kind : "rectangle",
+            axis: ["horizontal", "vertical", "diagonal"].includes(shape.axis) ? shape.axis : "horizontal",
+            flipX: Boolean(shape.flipX),
+            flipY: Boolean(shape.flipY),
+          };
         }
         return normalizedBlock;
       });
@@ -93,6 +100,7 @@
     setLayout(layout, notify = true) {
       this.syncFromDom();
       this.layout = layout === "free" ? "free" : "flow";
+      if (this.layout !== "free") this.cancelShapeTool();
       this.render();
       const button = document.querySelector("#block-layout");
       if (button) {
@@ -162,20 +170,22 @@
       return { x: 24 + (index % 2) * 360, y: 24 + Math.floor(index / 2) * 170, w: width, h: height };
     }
 
-    insertShape(kind) {
+    activateShapeTool(kind) {
       if (!["rectangle", "diamond", "triangle", "circle", "arrow"].includes(kind)) return;
       if (this.layout !== "free") this.setLayout("free", false);
-      const block = {
-        id: blockId(),
-        type: "shape",
-        text: "",
-        shape: { kind },
-        position: this.nextFreePosition(kind === "arrow" ? 360 : 240, kind === "arrow" ? 90 : 140),
-      };
-      this.blocks.push(block);
-      this.activeBlockId = block.id;
-      this.commit();
-      this.focusBlock(block.id);
+      this.pendingShape = this.pendingShape === kind ? null : kind;
+      this.root.classList.toggle("drawing-shape", Boolean(this.pendingShape));
+      const button = document.querySelector("#block-shapes");
+      button?.classList.toggle("active", Boolean(this.pendingShape));
+      if (button) button.textContent = this.pendingShape ? "✛ Desenhe no quadro" : "◇ Formas";
+    }
+
+    cancelShapeTool() {
+      this.pendingShape = null;
+      this.root.classList.remove("drawing-shape");
+      const button = document.querySelector("#block-shapes");
+      button?.classList.remove("active");
+      if (button) button.textContent = "◇ Formas";
     }
 
     replaceText(search, replacement) {
@@ -377,13 +387,17 @@
 
     startPointerDrag(event) {
       if (this.layout !== "free" || event.button !== 0) return;
-      const resize = event.target.closest(".shape-resize");
+      if (this.pendingShape && event.target === this.root) {
+        this.startShapeDrawing(event);
+        return;
+      }
+      const resize = event.target.closest("[data-shape-handle]");
       if (resize) {
         const row = resize.closest(".block-row");
         const block = this.blocks.find((item) => item.id === row?.dataset.id);
         if (!row || !block) return;
         event.preventDefault();
-        this.shapeResize = { id: block.id, pointerId: event.pointerId, handle: resize, startX: event.clientX, startY: event.clientY, width: block.position.w, height: block.position.h };
+        this.shapeResize = { id: block.id, pointerId: event.pointerId, handle: resize, corner: resize.dataset.shapeHandle || "se", startX: event.clientX, startY: event.clientY, left: block.position.x, top: block.position.y, width: block.position.w, height: block.position.h };
         resize.setPointerCapture(event.pointerId);
         row.classList.add("shape-resizing");
         return;
@@ -410,14 +424,32 @@
     }
 
     movePointerDrag(event) {
+      if (this.shapeDraw?.pointerId === event.pointerId) {
+        this.updateShapeDrawing(event);
+        return;
+      }
       if (this.shapeResize?.pointerId === event.pointerId) {
         event.preventDefault();
         const resize = this.shapeResize;
         const block = this.blocks.find((item) => item.id === resize.id);
         const row = this.root.querySelector(`[data-id="${CSS.escape(resize.id)}"]`);
         if (!block || !row) return;
-        block.position.w = clamp(resize.width + event.clientX - resize.startX, 140, 900, resize.width);
-        block.position.h = clamp(resize.height + event.clientY - resize.startY, 60, 900, resize.height);
+        const dx = event.clientX - resize.startX;
+        const dy = event.clientY - resize.startY;
+        const minWidth = block.shape?.kind === "arrow" ? 40 : 100;
+        const minHeight = block.shape?.kind === "arrow" ? 24 : 60;
+        if (resize.corner.includes("e")) block.position.w = clamp(resize.width + dx, minWidth, 900, resize.width);
+        if (resize.corner.includes("s")) block.position.h = clamp(resize.height + dy, minHeight, 900, resize.height);
+        if (resize.corner.includes("w")) {
+          block.position.w = clamp(resize.width - dx, minWidth, 900, resize.width);
+          block.position.x = resize.left + resize.width - block.position.w;
+        }
+        if (resize.corner.includes("n")) {
+          block.position.h = clamp(resize.height - dy, minHeight, 900, resize.height);
+          block.position.y = resize.top + resize.height - block.position.h;
+        }
+        row.style.left = `${block.position.x}px`;
+        row.style.top = `${block.position.y}px`;
         row.style.width = `${block.position.w}px`;
         row.style.height = `${block.position.h}px`;
         this.expandFreeCanvas();
@@ -448,6 +480,10 @@
     }
 
     endPointerDrag(event) {
+      if (this.shapeDraw?.pointerId === event.pointerId) {
+        this.finishShapeDrawing(event);
+        return;
+      }
       if (this.shapeResize?.pointerId === event.pointerId) {
         const resize = this.shapeResize;
         const row = this.root.querySelector(`[data-id="${CSS.escape(resize.id)}"]`);
@@ -471,6 +507,61 @@
       const right = this.blocks.reduce((max, block) => Math.max(max, (block.position?.x || 0) + (block.position?.w || 320) + 40), 760);
       this.root.style.minHeight = `${bottom}px`;
       this.root.style.minWidth = `${right}px`;
+    }
+
+    startShapeDrawing(event) {
+      event.preventDefault();
+      const bounds = this.root.getBoundingClientRect();
+      const startX = clamp(event.clientX - bounds.left, 0, 4000, 0);
+      const startY = clamp(event.clientY - bounds.top, 0, 6000, 0);
+      const draft = document.createElement("div");
+      draft.className = "shape-draw-preview";
+      draft.innerHTML = `<div class="shape-block kind-${this.pendingShape}">${this.shapeSvg(this.pendingShape, { axis: "horizontal" })}</div>`;
+      draft.style.left = `${startX}px`;
+      draft.style.top = `${startY}px`;
+      draft.style.width = "1px";
+      draft.style.height = "1px";
+      this.root.appendChild(draft);
+      this.shapeDraw = { kind: this.pendingShape, pointerId: event.pointerId, clientStartX: event.clientX, clientStartY: event.clientY, startX, startY, draft, width: 1, height: 1, x: startX, y: startY, axis: "horizontal", flipX: false, flipY: false };
+      this.root.setPointerCapture(event.pointerId);
+    }
+
+    updateShapeDrawing(event) {
+      event.preventDefault();
+      const draw = this.shapeDraw;
+      const bounds = this.root.getBoundingClientRect();
+      const currentX = clamp(event.clientX - bounds.left, 0, 4000, draw.startX);
+      const currentY = clamp(event.clientY - bounds.top, 0, 6000, draw.startY);
+      const dx = currentX - draw.startX;
+      const dy = currentY - draw.startY;
+      draw.flipX = dx < 0;
+      draw.flipY = dy < 0;
+      draw.axis = draw.kind === "arrow" ? (Math.abs(dy) < 18 ? "horizontal" : Math.abs(dx) < 18 ? "vertical" : "diagonal") : "horizontal";
+      draw.width = Math.max(Math.abs(dx), draw.kind === "arrow" ? 40 : 100);
+      draw.height = Math.max(Math.abs(dy), draw.kind === "arrow" ? 24 : 60);
+      draw.x = dx < 0 ? draw.startX - draw.width : draw.startX;
+      draw.y = dy < 0 ? draw.startY - draw.height : draw.startY;
+      draw.draft.style.left = `${draw.x}px`;
+      draw.draft.style.top = `${draw.y}px`;
+      draw.draft.style.width = `${draw.width}px`;
+      draw.draft.style.height = `${draw.height}px`;
+      const shape = draw.draft.querySelector(".shape-block");
+      shape.className = `shape-block kind-${draw.kind} axis-${draw.axis} ${draw.flipX ? "flip-x" : ""} ${draw.flipY ? "flip-y" : ""}`;
+      shape.innerHTML = this.shapeSvg(draw.kind, draw);
+    }
+
+    finishShapeDrawing(event) {
+      const draw = this.shapeDraw;
+      if (this.root.hasPointerCapture?.(event.pointerId)) this.root.releasePointerCapture(event.pointerId);
+      draw.draft.remove();
+      this.shapeDraw = null;
+      if (Math.hypot(event.clientX - draw.clientStartX, event.clientY - draw.clientStartY) < 6) return;
+      const block = { id: blockId(), type: "shape", text: "", shape: { kind: draw.kind, axis: draw.axis, flipX: draw.flipX, flipY: draw.flipY }, position: { x: draw.x, y: draw.y, w: draw.width, h: draw.height } };
+      this.blocks.push(block);
+      this.activeBlockId = block.id;
+      this.cancelShapeTool();
+      this.commit();
+      this.focusBlock(block.id);
     }
 
     insertTextAt(clientX, clientY) {
@@ -693,7 +784,9 @@
             <figcaption class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</figcaption></figure>`;
         } else if (block.type === "shape") {
           const kind = block.shape?.kind || "rectangle";
-          body = `<div class="shape-block kind-${kind}">${this.shapeSvg(kind)}<div class="shape-label block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div><div class="shape-resize" contenteditable="false" title="Arraste para redimensionar" aria-label="Redimensionar forma"></div></div>`;
+          const shape = block.shape || { kind };
+          const shapeClasses = `shape-block kind-${kind} axis-${shape.axis || "horizontal"} ${shape.flipX ? "flip-x" : ""} ${shape.flipY ? "flip-y" : ""}`;
+          body = `<div class="${shapeClasses}">${this.shapeSvg(kind, shape)}<div class="shape-label block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div>${this.shapeHandles(shape)}</div>`;
         } else {
           body = `${marker}<div class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div>`;
         }
@@ -711,10 +804,26 @@
       this.silent = false;
     }
 
-    shapeSvg(kind) {
+    shapeHandles(shape) {
+      let corners = ["nw", "ne", "sw", "se"];
+      if (shape.kind === "arrow") {
+        if (shape.axis === "vertical") corners = shape.flipY ? ["s", "n"] : ["n", "s"];
+        else if (shape.axis === "diagonal") {
+          if (shape.flipX && shape.flipY) corners = ["se", "nw"];
+          else if (shape.flipX) corners = ["ne", "sw"];
+          else if (shape.flipY) corners = ["sw", "ne"];
+          else corners = ["nw", "se"];
+        } else corners = shape.flipX ? ["e", "w"] : ["w", "e"];
+      }
+      return corners.map((corner, index) => `<span class="shape-handle handle-${corner}" data-shape-handle="${corner}" contenteditable="false" title="${shape.kind === "arrow" ? (index ? "Fim da seta" : "Inicio da seta") : "Arraste para redimensionar"}" aria-label="Ajustar forma"></span>`).join("");
+    }
+
+    shapeSvg(kind, shape = {}) {
       if (kind === "diamond") return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><polygon class="shape-fill" points="100,3 197,60 100,117 3,60"></polygon></svg>';
       if (kind === "triangle") return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><polygon class="shape-fill" points="100,3 197,117 3,117"></polygon></svg>';
       if (kind === "circle") return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><ellipse class="shape-fill" cx="100" cy="60" rx="96" ry="56"></ellipse></svg>';
+      if (kind === "arrow" && shape.axis === "vertical") return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><line class="shape-line" x1="100" y1="8" x2="100" y2="94"></line><polygon class="shape-arrow-head" points="82,92 100,118 118,92"></polygon></svg>';
+      if (kind === "arrow" && shape.axis === "diagonal") return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><line class="shape-line" x1="7" y1="7" x2="177" y2="101"></line><polygon class="shape-arrow-head" points="164,82 198,118 151,108"></polygon></svg>';
       if (kind === "arrow") return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><line class="shape-line" x1="8" y1="60" x2="174" y2="60"></line><polygon class="shape-arrow-head" points="172,43 197,60 172,77"></polygon></svg>';
       return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><rect class="shape-fill" x="3" y="3" width="194" height="114" rx="5"></rect></svg>';
     }

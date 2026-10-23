@@ -267,11 +267,13 @@ kbd { border: 1px solid var(--line); border-radius: 3px; background: var(--paper
 .shape-icon.triangle { width: 0; height: 0; border: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-bottom: 17px solid var(--purple); }
 .shape-icon.circle { width: 17px; height: 17px; margin: 0 2px; border-radius: 50%; }
 .shape-icon.arrow { border: 0; font-size: 22px; color: var(--purple); }
-.block-toolbar .layout-toggle.active { background: var(--purple-soft); color: var(--purple); font-weight: 600; }
+.block-toolbar .layout-toggle.active, .block-toolbar #block-shapes.active { background: var(--purple-soft); color: var(--purple); font-weight: 600; }
 .block-toolbar span { margin-left: 5px; }
 .block-toolbar .link-shortcut-hint { margin-left: auto; opacity: .72; white-space: nowrap; }
 .block-editor { padding: 20px 30px 120px 20px; min-height: 430px; }
 .block-editor.free-layout { position: relative; min-width: 760px; padding: 0; cursor: text; background-image: radial-gradient(circle, var(--line) 1px, transparent 1px); background-size: 20px 20px; }
+.block-editor.free-layout.drawing-shape { cursor: crosshair; }
+.shape-draw-preview { position: absolute; z-index: 10; pointer-events: none; opacity: .78; }
 .block-editor.free-layout .block-row { position: absolute; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr); min-height: 42px; border: 1px solid transparent; background: var(--paper); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
 .block-editor.free-layout .block-row:hover, .block-editor.free-layout .block-row:focus-within { z-index: 2; border-color: var(--purple); box-shadow: 0 5px 18px rgba(0,0,0,.15); }
 .block-editor.free-layout .block-controls { position: absolute; top: 4px; right: 4px; z-index: 4; opacity: 0; }
@@ -289,14 +291,27 @@ kbd { border: 1px solid var(--line); border-radius: 3px; background: var(--paper
 .block-editor.free-layout .drop-before::before, .block-editor.free-layout .drop-after::after { display: none; }
 .type-shape .block-content { display: block; padding: 0; width: 100%; height: 100%; }
 .shape-block { position: relative; width: 100%; height: 100%; min-height: 70px; }
+.type-shape .shape-block, .shape-draw-preview .shape-block { min-height: 0; }
 .shape-block svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.shape-block.flip-x svg { transform: scaleX(-1); }
+.shape-block.flip-y svg { transform: scaleY(-1); }
+.shape-block.flip-x.flip-y svg { transform: scale(-1); }
 .shape-block svg .shape-fill { fill: var(--purple-soft); stroke: var(--purple); stroke-width: 3; vector-effect: non-scaling-stroke; }
 .shape-block svg .shape-line { fill: none; stroke: var(--purple); stroke-width: 5; vector-effect: non-scaling-stroke; }
 .shape-block svg .shape-arrow-head { fill: var(--purple); }
 .shape-block .shape-label { position: absolute; inset: 18% 14%; display: grid; place-items: center; text-align: center; z-index: 1; }
 .shape-block.kind-arrow .shape-label { inset: 0 18% 45%; font-size: 12px; }
-.shape-resize { position: absolute; right: -5px; bottom: -5px; z-index: 5; width: 13px; height: 13px; border: 2px solid var(--paper); border-radius: 50%; background: var(--purple); cursor: nwse-resize; touch-action: none; }
-.block-editor:not(.free-layout) .shape-resize { display: none; }
+.shape-handle { position: absolute; z-index: 5; width: 13px; height: 13px; border: 2px solid var(--paper); border-radius: 50%; background: var(--purple); touch-action: none; opacity: 0; transition: opacity .1s; }
+.type-shape:hover .shape-handle, .type-shape:focus-within .shape-handle, .type-shape.shape-resizing .shape-handle { opacity: 1; }
+.handle-nw { left: -6px; top: -6px; cursor: nwse-resize; }
+.handle-ne { right: -6px; top: -6px; cursor: nesw-resize; }
+.handle-sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.handle-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.handle-n { left: calc(50% - 6px); top: -6px; cursor: ns-resize; }
+.handle-s { left: calc(50% - 6px); bottom: -6px; cursor: ns-resize; }
+.handle-w { left: -6px; top: calc(50% - 6px); cursor: ew-resize; }
+.handle-e { right: -6px; top: calc(50% - 6px); cursor: ew-resize; }
+.block-editor:not(.free-layout) .shape-handle { display: none; }
 .block-row { position: relative; display: grid; grid-template-columns: 42px 1fr; border-radius: 4px; min-height: 34px; }
 .block-row:hover { background: #faf9f8; }
 .block-row.dragging { opacity: .42; }

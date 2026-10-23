@@ -60,7 +60,7 @@ class DocumentModelTest(unittest.TestCase):
             "id": "shape-1",
             "type": "shape",
             "text": "Aprovar pedido",
-            "shape": {"kind": "diamond"},
+            "shape": {"kind": "diamond", "axis": "diagonal", "flipX": True, "flipY": False},
             "position": {"x": 120, "y": 80, "w": 260, "h": 150},
         }
         document = apply_document_payload({}, {"blocks": [block]})
