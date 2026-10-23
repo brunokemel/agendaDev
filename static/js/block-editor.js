@@ -29,6 +29,7 @@
       this.layout = "flow";
       this.draggedId = null;
       this.dragOffset = { x: 0, y: 0 };
+      this.pointerDrag = null;
       this.dropPosition = "before";
       this.menuBlockId = null;
       this.activeBlockId = null;
@@ -210,6 +211,10 @@
         if (action.dataset.blockAction === "up") this.moveBlock(row.dataset.id, -1);
         if (action.dataset.blockAction === "down") this.moveBlock(row.dataset.id, 1);
       });
+      this.root.addEventListener("pointerdown", (event) => this.startPointerDrag(event));
+      this.root.addEventListener("pointermove", (event) => this.movePointerDrag(event));
+      this.root.addEventListener("pointerup", (event) => this.endPointerDrag(event));
+      this.root.addEventListener("pointercancel", (event) => this.endPointerDrag(event));
       this.root.addEventListener("keydown", (event) => this.onKeydown(event));
       this.root.addEventListener("dragstart", (event) => {
         const row = event.target.closest(".block-row");
@@ -339,6 +344,61 @@
       } else if (event.key === "/" && !input.textContent) {
         setTimeout(() => this.openMenu(row.dataset.id, ""), 0);
       }
+    }
+
+    startPointerDrag(event) {
+      if (this.layout !== "free" || event.button !== 0) return;
+      const handle = event.target.closest(".block-grip, .image-frame");
+      const row = handle?.closest(".block-row");
+      if (!handle || !row) return;
+      event.preventDefault();
+      this.syncFromDom();
+      const rect = row.getBoundingClientRect();
+      this.pointerDrag = {
+        id: row.dataset.id,
+        pointerId: event.pointerId,
+        handle,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+        moved: false,
+      };
+      handle.setPointerCapture(event.pointerId);
+      row.classList.add("pointer-dragging");
+    }
+
+    movePointerDrag(event) {
+      const drag = this.pointerDrag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      const block = this.blocks.find((item) => item.id === drag.id);
+      const row = this.root.querySelector(`[data-id="${CSS.escape(drag.id)}"]`);
+      if (!block || !row) return;
+      const bounds = this.root.getBoundingClientRect();
+      const x = clamp(event.clientX - bounds.left - drag.offsetX, 0, 4000, 0);
+      const y = clamp(event.clientY - bounds.top - drag.offsetY, 0, 6000, 0);
+      drag.moved = drag.moved || Math.abs(x - block.position.x) > 2 || Math.abs(y - block.position.y) > 2;
+      block.position.x = x;
+      block.position.y = y;
+      row.style.left = `${x}px`;
+      row.style.top = `${y}px`;
+      this.expandFreeCanvas();
+    }
+
+    endPointerDrag(event) {
+      const drag = this.pointerDrag;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const row = this.root.querySelector(`[data-id="${CSS.escape(drag.id)}"]`);
+      row?.classList.remove("pointer-dragging");
+      if (drag.handle.hasPointerCapture?.(event.pointerId)) drag.handle.releasePointerCapture(event.pointerId);
+      this.pointerDrag = null;
+      if (drag.moved) this.record();
+    }
+
+    expandFreeCanvas() {
+      const bottom = this.blocks.reduce((max, block) => Math.max(max, (block.position?.y || 0) + (block.type === "image" ? 560 : 180)), 700);
+      const right = this.blocks.reduce((max, block) => Math.max(max, (block.position?.x || 0) + (block.position?.w || 320) + 40), 760);
+      this.root.style.minHeight = `${bottom}px`;
+      this.root.style.minWidth = `${right}px`;
     }
 
     syncFromDom() {
@@ -503,8 +563,8 @@
           body = `<figure class="block-image-figure align-${block.align}" style="width:${block.width}%">
             <div class="image-tools" contenteditable="false" aria-label="Controles da imagem">
               <button type="button" data-image-action="smaller" title="Diminuir imagem" aria-label="Diminuir imagem">−</button><span class="image-size-label">${this.layout === "free" ? `${block.position.w}px` : `${block.width}%`}</span><button type="button" data-image-action="larger" title="Aumentar imagem" aria-label="Aumentar imagem">+</button>
-              <span class="image-tools-separator"></span>
-              <button type="button" data-image-action="align-left" class="${block.align === "left" ? "active" : ""}" title="Alinhar a esquerda">←</button><button type="button" data-image-action="align-center" class="${block.align === "center" ? "active" : ""}" title="Centralizar">↔</button><button type="button" data-image-action="align-right" class="${block.align === "right" ? "active" : ""}" title="Alinhar a direita">→</button>
+              <span class="image-tools-separator flow-only"></span>
+              <button type="button" data-image-action="align-left" class="flow-only ${block.align === "left" ? "active" : ""}" title="Alinhar a esquerda">←</button><button type="button" data-image-action="align-center" class="flow-only ${block.align === "center" ? "active" : ""}" title="Centralizar">↔</button><button type="button" data-image-action="align-right" class="flow-only ${block.align === "right" ? "active" : ""}" title="Alinhar a direita">→</button>
               <span class="image-tools-separator"></span><button type="button" data-image-action="crop" class="${crop.open ? "active" : ""}">Cortar</button>
             </div>
             <div class="image-crop-panel ${crop.open ? "" : "hidden"}" contenteditable="false">
@@ -514,7 +574,7 @@
               <label>Vertical</label><input type="range" min="0" max="100" value="${crop.y}" data-image-field="y">
               <span></span><button type="button" data-image-action="reset-crop">Restaurar recorte</button>
             </div>
-            <div class="image-frame ${ratio ? "is-cropped" : ""}" style="${ratio ? `aspect-ratio:${ratio}` : ""}"><img src="/api/assets/${this.escape(block.asset.id)}" alt="${this.escape(block.text || block.asset.filename)}" loading="lazy" style="${imageStyle}"></div>
+            <div class="image-frame ${ratio ? "is-cropped" : ""}" title="${this.layout === "free" ? "Segure e arraste a imagem" : ""}" style="${ratio ? `aspect-ratio:${ratio}` : ""}"><img src="/api/assets/${this.escape(block.asset.id)}" alt="${this.escape(block.text || block.asset.filename)}" loading="lazy" draggable="false" style="${imageStyle}"></div>
             <figcaption class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</figcaption></figure>`;
         } else {
           body = `${marker}<div class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div>`;
@@ -522,13 +582,10 @@
         const position = block.position || this.nextFreePosition(block.type === "image" ? 460 : 320);
         const freeStyle = this.layout === "free" ? `style="left:${position.x}px;top:${position.y}px;width:${position.w}px"` : "";
         const dragTitle = this.layout === "free" ? "Segure e arraste para qualquer lugar" : "Arraste para reorganizar";
-        return `<div class="block-row type-${block.type}" data-id="${block.id}" ${freeStyle}><div class="block-controls"><button type="button" class="block-grip" draggable="true" title="${dragTitle}" aria-label="${dragTitle}">⠿</button><button type="button" data-block-action="delete" title="Excluir bloco">×</button></div><div class="block-content">${body}</div></div>`;
+        return `<div class="block-row type-${block.type}" data-id="${block.id}" ${freeStyle}><div class="block-controls"><button type="button" class="block-grip" draggable="${this.layout === "flow"}" title="${dragTitle}" aria-label="${dragTitle}">⠿</button><button type="button" data-block-action="delete" title="Excluir bloco">×</button></div><div class="block-content">${body}</div></div>`;
       }).join("");
       if (this.layout === "free") {
-        const bottom = this.blocks.reduce((max, block) => Math.max(max, (block.position?.y || 0) + (block.type === "image" ? 560 : 180)), 700);
-        const right = this.blocks.reduce((max, block) => Math.max(max, (block.position?.x || 0) + (block.position?.w || 320) + 40), 760);
-        this.root.style.minHeight = `${bottom}px`;
-        this.root.style.minWidth = `${right}px`;
+        this.expandFreeCanvas();
       } else {
         this.root.style.minHeight = "430px";
         this.root.style.minWidth = "";
