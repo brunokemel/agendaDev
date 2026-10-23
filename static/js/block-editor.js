@@ -205,7 +205,10 @@
           return;
         }
         const action = event.target.closest("[data-block-action]");
-        if (!action) return;
+        if (!action) {
+          if (this.layout === "free" && event.target === this.root) this.insertTextAt(event.clientX, event.clientY);
+          return;
+        }
         const row = action.closest(".block-row");
         if (action.dataset.blockAction === "delete") this.removeBlock(row.dataset.id);
         if (action.dataset.blockAction === "up") this.moveBlock(row.dataset.id, -1);
@@ -406,6 +409,25 @@
       const right = this.blocks.reduce((max, block) => Math.max(max, (block.position?.x || 0) + (block.position?.w || 320) + 40), 760);
       this.root.style.minHeight = `${bottom}px`;
       this.root.style.minWidth = `${right}px`;
+    }
+
+    insertTextAt(clientX, clientY) {
+      this.syncFromDom();
+      const bounds = this.root.getBoundingClientRect();
+      const block = {
+        id: blockId(),
+        type: "paragraph",
+        text: "",
+        position: {
+          x: clamp(clientX - bounds.left, 0, 4000, 24),
+          y: clamp(clientY - bounds.top, 0, 6000, 24),
+          w: 320,
+        },
+      };
+      this.blocks.push(block);
+      this.activeBlockId = block.id;
+      this.commit();
+      this.focusBlock(block.id);
     }
 
     syncFromDom() {

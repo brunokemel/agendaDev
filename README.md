@@ -85,7 +85,7 @@ Os dados persistentes ficam em `data/notes.json`, `data/notebooks.json` e, para 
 
 Imagens inseridas nas notas podem ser arrastadas entre os blocos, aumentadas ou reduzidas, alinhadas e recortadas visualmente por proporcao, zoom e ponto de foco. O recorte e reversivel e nao modifica o arquivo original. O botao **Modo escuro/Modo claro** fica visivel na barra superior e guarda a preferencia localmente.
 
-No editor, o botao **Modo livre** transforma a nota em um quadro: clique no texto para editar ou segure e mova para arrastar; imagens tambem podem ser seguradas diretamente. Use **Organizar** para retornar ao fluxo vertical; as coordenadas ficam guardadas para quando o modo livre for aberto novamente.
+No editor, o botao **Modo livre** transforma a nota em um quadro: clique em um espaco vazio para criar texto naquele ponto; clique no texto para editar ou segure e mova para arrastar; imagens tambem podem ser seguradas diretamente. Use **Organizar** para retornar ao fluxo vertical; as coordenadas ficam guardadas para quando o modo livre for aberto novamente.
 
 ## Backup completo e restauracao
 
