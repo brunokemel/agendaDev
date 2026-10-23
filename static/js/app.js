@@ -378,6 +378,7 @@ function renderBlockPreview(blocks) {
     if (block.type === "checklist") return `<div>${block.checked ? "☑" : "☐"} ${text}</div>`;
     if (block.type === "quote") return `<blockquote>${text}</blockquote>`;
     if (block.type === "divider") return "<hr>";
+    if (block.type === "shape") return `<div class="preview-shape preview-${escapeHtml(block.shape?.kind || "rectangle")}">${text || "Forma"}</div>`;
     if (block.type === "image" && block.asset && block.asset.id) {
       const width = Math.min(100, Math.max(20, Number(block.width) || 100));
       const align = ["left", "center", "right"].includes(block.align) ? block.align : "center";
@@ -595,7 +596,7 @@ async function saveNote({ silent = false } = {}) {
   if (state.saveInFlight) await state.saveInFlight;
   const payload = gatherNote();
   const savingVersion = state.editorVersion;
-  const meaningful = payload.title !== "Sem titulo" || payload.blocks.some((block) => block.text.trim() || block.type === "divider" || block.type === "image");
+  const meaningful = payload.title !== "Sem titulo" || payload.blocks.some((block) => block.text.trim() || ["divider", "image", "shape"].includes(block.type));
   if (!payload.id && !meaningful) return;
   setSaveStatus("Salvando...", "saving");
   state.saveInFlight = (async () => {
@@ -644,6 +645,51 @@ function initBlockEditor() {
   state.blockEditor.setLayout("flow", false);
   $("#block-layout").addEventListener("click", () => {
     state.blockEditor.setLayout(state.blockEditor.getLayout() === "free" ? "flow" : "free");
+  });
+  $("#block-shapes").addEventListener("click", (event) => {
+    event.stopPropagation();
+    $("#shape-menu").classList.toggle("hidden");
+  });
+  $("#shape-menu").addEventListener("click", (event) => {
+    const option = event.target.closest("[data-shape]");
+    if (!option) return;
+    state.blockEditor.insertShape(option.dataset.shape);
+    $("#shape-menu").classList.add("hidden");
+  });
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".shape-picker")) $("#shape-menu").classList.add("hidden");
+  });
+}
+
+function initEditorResizer() {
+  const body = $(".editor-body");
+  const handle = $("#editor-resizer");
+  const saved = Number(localStorage.getItem("agendaDev.editorMainWidth"));
+  if (Number.isFinite(saved) && saved >= 35 && saved <= 80) body.style.setProperty("--editor-main-width", `${saved}%`);
+  let resizing = false;
+  handle.addEventListener("pointerdown", (event) => {
+    resizing = true;
+    handle.classList.add("dragging");
+    handle.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  handle.addEventListener("pointermove", (event) => {
+    if (!resizing) return;
+    const rect = body.getBoundingClientRect();
+    const percent = Math.min(80, Math.max(35, ((event.clientX - rect.left) / rect.width) * 100));
+    body.style.setProperty("--editor-main-width", `${percent}%`);
+    localStorage.setItem("agendaDev.editorMainWidth", String(Math.round(percent * 10) / 10));
+  });
+  const stop = () => { resizing = false; handle.classList.remove("dragging"); };
+  handle.addEventListener("pointerup", stop);
+  handle.addEventListener("pointercancel", stop);
+  handle.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    const current = parseFloat(getComputedStyle(body).getPropertyValue("--editor-main-width")) || 60;
+    const percent = Math.min(80, Math.max(35, current + (event.key === "ArrowRight" ? 2 : -2)));
+    body.style.setProperty("--editor-main-width", `${percent}%`);
+    localStorage.setItem("agendaDev.editorMainWidth", String(percent));
   });
 }
 
@@ -981,6 +1027,8 @@ function bindEvents() {
       $("#notebook-modal").classList.add("hidden");
       $("#report-modal").classList.add("hidden");
       $("#preview-modal").classList.add("hidden");
+      $("#link-modal").classList.add("hidden");
+      $("#shape-menu").classList.add("hidden");
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
       e.preventDefault();
@@ -1012,6 +1060,7 @@ async function openReport() {
 }
 
 initBlockEditor();
+initEditorResizer();
 applyTheme(document.documentElement.dataset.theme);
 applySidebarPreferences();
 bindEvents();

@@ -10,6 +10,7 @@
     quote: { label: "Citacao", placeholder: "Citacao" },
     divider: { label: "Divisor", placeholder: "" },
     image: { label: "Imagem", placeholder: "Adicione uma legenda" },
+    shape: { label: "Forma", placeholder: "Texto da forma" },
   };
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -31,6 +32,7 @@
       this.draggedId = null;
       this.dragOffset = { x: 0, y: 0 };
       this.pointerDrag = null;
+      this.shapeResize = null;
       this.dropPosition = "before";
       this.menuBlockId = null;
       this.activeBlockId = null;
@@ -51,6 +53,7 @@
           x: clamp(position.x, 0, 4000, 24 + (index % 2) * 360),
           y: clamp(position.y, 0, 6000, 24 + Math.floor(index / 2) * 170),
           w: clamp(position.w, 180, 900, type === "image" ? 460 : 320),
+          h: clamp(position.h, 60, 900, type === "shape" ? 140 : 180),
         };
         if (type === "image" && block.asset && typeof block.asset === "object") {
           normalizedBlock.asset = {
@@ -69,6 +72,10 @@
             y: clamp(crop.y, 0, 100, 50),
             open: Boolean(crop.open),
           };
+        }
+        if (type === "shape") {
+          const shape = block.shape && typeof block.shape === "object" ? block.shape : {};
+          normalizedBlock.shape = { kind: ["rectangle", "diamond", "triangle", "circle", "arrow"].includes(shape.kind) ? shape.kind : "rectangle" };
         }
         return normalizedBlock;
       });
@@ -110,6 +117,7 @@
       return this.getBlocks().map((block, index) => {
         if (block.type === "divider") return "---";
         if (block.type === "image") return `[Imagem: ${(block.asset && block.asset.filename) || "imagem"}]${block.text ? ` ${block.text}` : ""}`;
+        if (block.type === "shape") return `[Forma: ${block.shape?.kind || "forma"}]${block.text ? ` ${block.text}` : ""}`;
         if (block.type === "checklist") return `[${block.checked ? "x" : " "}] ${block.text}`;
         if (block.type === "bulleted_list") return `- ${block.text}`;
         if (block.type === "numbered_list") return `${index + 1}. ${block.text}`;
@@ -149,9 +157,25 @@
       this.focusBlock(image.id);
     }
 
-    nextFreePosition(width = 320) {
+    nextFreePosition(width = 320, height = 180) {
       const index = this.blocks.length;
-      return { x: 24 + (index % 2) * 360, y: 24 + Math.floor(index / 2) * 170, w: width };
+      return { x: 24 + (index % 2) * 360, y: 24 + Math.floor(index / 2) * 170, w: width, h: height };
+    }
+
+    insertShape(kind) {
+      if (!["rectangle", "diamond", "triangle", "circle", "arrow"].includes(kind)) return;
+      if (this.layout !== "free") this.setLayout("free", false);
+      const block = {
+        id: blockId(),
+        type: "shape",
+        text: "",
+        shape: { kind },
+        position: this.nextFreePosition(kind === "arrow" ? 360 : 240, kind === "arrow" ? 90 : 140),
+      };
+      this.blocks.push(block);
+      this.activeBlockId = block.id;
+      this.commit();
+      this.focusBlock(block.id);
     }
 
     replaceText(search, replacement) {
@@ -353,6 +377,17 @@
 
     startPointerDrag(event) {
       if (this.layout !== "free" || event.button !== 0) return;
+      const resize = event.target.closest(".shape-resize");
+      if (resize) {
+        const row = resize.closest(".block-row");
+        const block = this.blocks.find((item) => item.id === row?.dataset.id);
+        if (!row || !block) return;
+        event.preventDefault();
+        this.shapeResize = { id: block.id, pointerId: event.pointerId, handle: resize, startX: event.clientX, startY: event.clientY, width: block.position.w, height: block.position.h };
+        resize.setPointerCapture(event.pointerId);
+        row.classList.add("shape-resizing");
+        return;
+      }
       const row = event.target.closest(".block-row");
       const imageHandle = event.target.closest(".image-frame");
       if (!row || (!imageHandle && event.target.closest("button, input, select, a, .image-tools, .image-crop-panel"))) return;
@@ -375,6 +410,19 @@
     }
 
     movePointerDrag(event) {
+      if (this.shapeResize?.pointerId === event.pointerId) {
+        event.preventDefault();
+        const resize = this.shapeResize;
+        const block = this.blocks.find((item) => item.id === resize.id);
+        const row = this.root.querySelector(`[data-id="${CSS.escape(resize.id)}"]`);
+        if (!block || !row) return;
+        block.position.w = clamp(resize.width + event.clientX - resize.startX, 140, 900, resize.width);
+        block.position.h = clamp(resize.height + event.clientY - resize.startY, 60, 900, resize.height);
+        row.style.width = `${block.position.w}px`;
+        row.style.height = `${block.position.h}px`;
+        this.expandFreeCanvas();
+        return;
+      }
       const drag = this.pointerDrag;
       if (!drag || drag.pointerId !== event.pointerId) return;
       event.preventDefault();
@@ -400,6 +448,15 @@
     }
 
     endPointerDrag(event) {
+      if (this.shapeResize?.pointerId === event.pointerId) {
+        const resize = this.shapeResize;
+        const row = this.root.querySelector(`[data-id="${CSS.escape(resize.id)}"]`);
+        row?.classList.remove("shape-resizing");
+        if (resize.handle.hasPointerCapture?.(event.pointerId)) resize.handle.releasePointerCapture(event.pointerId);
+        this.shapeResize = null;
+        this.record();
+        return;
+      }
       const drag = this.pointerDrag;
       if (!drag || drag.pointerId !== event.pointerId) return;
       const row = this.root.querySelector(`[data-id="${CSS.escape(drag.id)}"]`);
@@ -410,7 +467,7 @@
     }
 
     expandFreeCanvas() {
-      const bottom = this.blocks.reduce((max, block) => Math.max(max, (block.position?.y || 0) + (block.type === "image" ? 560 : 180)), 700);
+      const bottom = this.blocks.reduce((max, block) => Math.max(max, (block.position?.y || 0) + (block.type === "shape" ? block.position?.h || 140 : block.type === "image" ? 560 : 180)), 700);
       const right = this.blocks.reduce((max, block) => Math.max(max, (block.position?.x || 0) + (block.position?.w || 320) + 40), 760);
       this.root.style.minHeight = `${bottom}px`;
       this.root.style.minWidth = `${right}px`;
@@ -427,6 +484,7 @@
           x: clamp(clientX - bounds.left, 0, 4000, 24),
           y: clamp(clientY - bounds.top, 0, 6000, 24),
           w: 320,
+          h: 180,
         },
       };
       this.blocks.push(block);
@@ -570,7 +628,7 @@
     openMenu(id, filter) {
       this.menuBlockId = id;
       const needle = String(filter || "").toLocaleLowerCase("pt-BR");
-      const options = Object.entries(TYPES).filter(([type, config]) => type !== "image" && config.label.toLocaleLowerCase("pt-BR").includes(needle));
+      const options = Object.entries(TYPES).filter(([type, config]) => !["image", "shape"].includes(type) && config.label.toLocaleLowerCase("pt-BR").includes(needle));
       this.menu.innerHTML = options.map(([type, config], index) => `<button class="${index === 0 ? "selected" : ""}" data-block-type="${type}"><b>${config.label}</b><span>${TYPES[type].placeholder}</span></button>`).join("");
       const row = this.root.querySelector(`[data-id="${CSS.escape(id)}"]`);
       if (row) {
@@ -633,11 +691,14 @@
             </div>
             <div class="image-frame ${ratio ? "is-cropped" : ""}" title="${this.layout === "free" ? "Segure e arraste a imagem" : ""}" style="${ratio ? `aspect-ratio:${ratio}` : ""}"><img src="/api/assets/${this.escape(block.asset.id)}" alt="${this.escape(block.text || block.asset.filename)}" loading="lazy" draggable="false" style="${imageStyle}"></div>
             <figcaption class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</figcaption></figure>`;
+        } else if (block.type === "shape") {
+          const kind = block.shape?.kind || "rectangle";
+          body = `<div class="shape-block kind-${kind}">${this.shapeSvg(kind)}<div class="shape-label block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div><div class="shape-resize" contenteditable="false" title="Arraste para redimensionar" aria-label="Redimensionar forma"></div></div>`;
         } else {
           body = `${marker}<div class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div>`;
         }
         const position = block.position || this.nextFreePosition(block.type === "image" ? 460 : 320);
-        const freeStyle = this.layout === "free" ? `style="left:${position.x}px;top:${position.y}px;width:${position.w}px"` : "";
+        const freeStyle = this.layout === "free" ? `style="left:${position.x}px;top:${position.y}px;width:${position.w}px;${block.type === "shape" ? `height:${position.h}px` : ""}"` : "";
         const dragTitle = this.layout === "free" ? "Segure e arraste para qualquer lugar" : "Arraste para reorganizar";
         return `<div class="block-row type-${block.type}" data-id="${block.id}" ${freeStyle}><div class="block-controls"><button type="button" class="block-grip" draggable="${this.layout === "flow"}" title="${dragTitle}" aria-label="${dragTitle}">⠿</button><button type="button" data-block-action="delete" title="Excluir bloco">×</button></div><div class="block-content">${body}</div></div>`;
       }).join("");
@@ -648,6 +709,14 @@
         this.root.style.minWidth = "";
       }
       this.silent = false;
+    }
+
+    shapeSvg(kind) {
+      if (kind === "diamond") return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><polygon class="shape-fill" points="100,3 197,60 100,117 3,60"></polygon></svg>';
+      if (kind === "triangle") return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><polygon class="shape-fill" points="100,3 197,117 3,117"></polygon></svg>';
+      if (kind === "circle") return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><ellipse class="shape-fill" cx="100" cy="60" rx="96" ry="56"></ellipse></svg>';
+      if (kind === "arrow") return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><line class="shape-line" x1="8" y1="60" x2="174" y2="60"></line><polygon class="shape-arrow-head" points="172,43 197,60 172,77"></polygon></svg>';
+      return '<svg viewBox="0 0 200 120" preserveAspectRatio="none" aria-hidden="true"><rect class="shape-fill" x="3" y="3" width="194" height="114" rx="5"></rect></svg>';
     }
 
     escape(value) {

@@ -152,6 +152,16 @@
             <button type="button" id="block-undo" title="Desfazer (Ctrl+Z)">↶</button>
             <button type="button" id="block-redo" title="Refazer (Ctrl+Y)">↷</button>
             <button type="button" id="block-image" title="Inserir imagem">▧ Imagem</button>
+            <div class="shape-picker">
+              <button type="button" id="block-shapes" title="Inserir forma ou seta">◇ Formas</button>
+              <div class="shape-menu hidden" id="shape-menu" aria-label="Formas predefinidas">
+                <button type="button" data-shape="rectangle"><span class="shape-icon rectangle"></span>Retângulo</button>
+                <button type="button" data-shape="diamond"><span class="shape-icon diamond"></span>Losango</button>
+                <button type="button" data-shape="triangle"><span class="shape-icon triangle"></span>Triângulo</button>
+                <button type="button" data-shape="circle"><span class="shape-icon circle"></span>Círculo</button>
+                <button type="button" data-shape="arrow"><span class="shape-icon arrow">→</span>Seta</button>
+              </div>
+            </div>
             <button type="button" id="block-layout" class="layout-toggle" title="Alternar entre layout organizado e livre">✥ Modo livre</button>
             <span>Digite <kbd>/</kbd> para adicionar blocos</span>
             <span class="link-shortcut-hint"><kbd>Ctrl</kbd> + clique abre links</span>
@@ -161,6 +171,7 @@
           <textarea id="ed-content" class="legacy-content" aria-hidden="true" tabindex="-1"></textarea>
           <input id="block-image-file" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple>
         </div>
+        <div class="editor-resizer" id="editor-resizer" role="separator" aria-orientation="vertical" aria-label="Redimensionar editor e painel de links" tabindex="0"></div>
         <aside class="links-col">
           <div class="links-head">
             <div>

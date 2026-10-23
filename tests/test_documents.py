@@ -55,6 +55,19 @@ class DocumentModelTest(unittest.TestCase):
         self.assertEqual(document["blocks"][0]["crop"]["zoom"], 140)
         self.assertEqual(document["content"], "[Imagem: diagrama.png] Diagrama da arquitetura")
 
+    def test_shape_block_keeps_geometry_position_and_text(self):
+        block = {
+            "id": "shape-1",
+            "type": "shape",
+            "text": "Aprovar pedido",
+            "shape": {"kind": "diamond"},
+            "position": {"x": 120, "y": 80, "w": 260, "h": 150},
+        }
+        document = apply_document_payload({}, {"blocks": [block]})
+
+        self.assertEqual(document["blocks"][0], block)
+        self.assertEqual(document["content"], "Aprovar pedido")
+
 
 if __name__ == "__main__":
     unittest.main()
