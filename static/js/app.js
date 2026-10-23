@@ -70,6 +70,16 @@ function linkify(text) {
   return html.replace(/\n/g, "<br>");
 }
 
+function openExternalLink(url) {
+  if (window.pywebview?.api?.open_external) {
+    window.pywebview.api.open_external(url).then((result) => {
+      if (!result?.ok) toast(result?.error || "Nao foi possivel abrir o link");
+    }).catch(() => toast("Nao foi possivel abrir o link"));
+    return;
+  }
+  window.open(url, "_blank", "noopener");
+}
+
 function excerpt(text) {
   return (text || "").replace(/\s+/g, " ").trim().slice(0, 140);
 }
@@ -588,6 +598,7 @@ function initBlockEditor() {
       markEditorDirty();
     },
     onImageFiles: uploadImages,
+    onOpenLink: openExternalLink,
   });
   state.blockEditor.setBlocks([]);
   state.blockEditor.setLayout("flow", false);

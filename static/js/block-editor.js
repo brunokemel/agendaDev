@@ -23,6 +23,7 @@
       this.menu = menu;
       this.onChange = options.onChange || (() => {});
       this.onImageFiles = options.onImageFiles || (() => {});
+      this.onOpenLink = options.onOpenLink || (() => {});
       this.blocks = [];
       this.history = [];
       this.historyIndex = -1;
@@ -198,6 +199,7 @@
         if (row) this.activeBlockId = row.dataset.id;
       });
       this.root.addEventListener("click", (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.target.closest(".block-input") && this.openLinkAtPoint(event)) return;
         const imageAction = event.target.closest("[data-image-action]");
         if (imageAction) {
           const row = imageAction.closest(".block-row");
@@ -367,8 +369,9 @@
         startX: event.clientX,
         startY: event.clientY,
         moved: false,
+        captured: Boolean(imageHandle),
       };
-      handle.setPointerCapture(event.pointerId);
+      if (imageHandle) handle.setPointerCapture(event.pointerId);
     }
 
     movePointerDrag(event) {
@@ -381,6 +384,8 @@
       if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5) return;
       if (!drag.moved) {
         drag.moved = true;
+        drag.handle.setPointerCapture(event.pointerId);
+        drag.captured = true;
         row.classList.add("pointer-dragging");
         window.getSelection()?.removeAllRanges();
       }
@@ -399,7 +404,7 @@
       if (!drag || drag.pointerId !== event.pointerId) return;
       const row = this.root.querySelector(`[data-id="${CSS.escape(drag.id)}"]`);
       row?.classList.remove("pointer-dragging");
-      if (drag.handle.hasPointerCapture?.(event.pointerId)) drag.handle.releasePointerCapture(event.pointerId);
+      if (drag.captured && drag.handle.hasPointerCapture?.(event.pointerId)) drag.handle.releasePointerCapture(event.pointerId);
       this.pointerDrag = null;
       if (drag.moved) this.record();
     }
@@ -428,6 +433,29 @@
       this.activeBlockId = block.id;
       this.commit();
       this.focusBlock(block.id);
+    }
+
+    openLinkAtPoint(event) {
+      const input = event.target.closest(".block-input");
+      const caret = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+      if (!input || !caret || !input.contains(caret.startContainer)) return false;
+      const before = document.createRange();
+      before.selectNodeContents(input);
+      before.setEnd(caret.startContainer, caret.startOffset);
+      const offset = before.toString().length;
+      const text = input.textContent || "";
+      const pattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|https?:\/\/[^\s<>()\[\]]+|www\.[^\s<>()\[\]]+/gi;
+      let match;
+      while ((match = pattern.exec(text))) {
+        if (offset < match.index || offset > match.index + match[0].length) continue;
+        const raw = match[2] || match[0];
+        const url = raw.startsWith("www.") ? `https://${raw}` : raw;
+        event.preventDefault();
+        event.stopPropagation();
+        this.onOpenLink(url);
+        return true;
+      }
+      return false;
     }
 
     syncFromDom() {

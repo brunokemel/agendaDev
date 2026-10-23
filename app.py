@@ -3,9 +3,11 @@ import json
 import os
 import socket
 import sys
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from threading import Thread
+from urllib.parse import urlsplit
 
 from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.serving import make_server
@@ -299,6 +301,17 @@ def api_report_txt():
 
 
 class DesktopApi:
+    def open_external(self, url):
+        value = str(url or "").strip()
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return {"ok": False, "error": "Link externo invalido"}
+        try:
+            opened = webbrowser.open(value, new=2)
+            return {"ok": bool(opened)}
+        except webbrowser.Error as err:
+            return {"ok": False, "error": str(err)}
+
     def export_agenda_backup(self):
         selected = desktop_window.create_file_dialog(webview.FileDialog.FOLDER)
         if not selected:
