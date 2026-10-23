@@ -85,6 +85,8 @@ Os dados persistentes ficam em `data/notes.json`, `data/notebooks.json` e, para 
 
 Imagens inseridas nas notas podem ser arrastadas entre os blocos, aumentadas ou reduzidas, alinhadas e recortadas visualmente por proporcao, zoom e ponto de foco. O recorte e reversivel e nao modifica o arquivo original. O botao **Modo escuro/Modo claro** fica visivel na barra superior e guarda a preferencia localmente.
 
+No editor, o botao **Modo livre** transforma a nota em um quadro: segure o puxador `⠿` de qualquer texto ou imagem e solte em qualquer ponto da pagina. Use **Organizar** para retornar ao fluxo vertical; as coordenadas ficam guardadas para quando o modo livre for aberto novamente.
+
 ## Backup completo e restauracao
 
 No aplicativo instalado, abra **Relatorios** e use **Exportar backup completo**. Escolha uma pasta de destino; o aplicativo criara nela uma subpasta com data e hora contendo notas, cadernos, assets, o registro de importacoes e os arquivos de `entrada_txt`. O manifesto do backup inclui hashes para detectar arquivos alterados ou corrompidos.

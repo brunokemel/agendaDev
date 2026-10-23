@@ -63,6 +63,26 @@ class StorageDocumentTest(unittest.TestCase):
         self.assertFalse(updated["favorite"])
         self.assertIsNone(updated["parent_id"])
 
+    def test_free_layout_and_block_position_are_persisted(self):
+        note = storage.upsert_note(
+            {
+                "title": "Quadro livre",
+                "layout": "free",
+                "blocks": [
+                    {
+                        "id": "b1",
+                        "type": "paragraph",
+                        "text": "Texto solto",
+                        "position": {"x": 180, "y": 95, "w": 320},
+                    }
+                ],
+            }
+        )
+
+        loaded = storage.get_note(note["id"])
+        self.assertEqual(loaded["layout"], "free")
+        self.assertEqual(loaded["blocks"][0]["position"], {"x": 180, "y": 95, "w": 320})
+
     def test_supported_blocks_round_trip_and_keep_searchable_content(self):
         blocks = [
             {"id": "h1", "type": "heading_1", "text": "Plano semanal"},

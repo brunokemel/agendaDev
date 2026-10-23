@@ -450,6 +450,7 @@ async function openEditor(id) {
     $("#ed-title").value = "";
     $("#ed-content").value = "";
     state.blockEditor.setBlocks([]);
+    state.blockEditor.setLayout("flow", false);
     $("#ed-importance").value = "media";
     $("#ed-tags").value = "";
     $("#ed-due").value = "";
@@ -477,6 +478,7 @@ async function openEditor(id) {
   $("#ed-title").value = n.title || "";
   $("#ed-content").value = n.content || "";
   state.blockEditor.setBlocks(n.blocks || [{ type: "paragraph", text: n.content || "" }]);
+  state.blockEditor.setLayout(n.layout || "flow", false);
   $("#ed-importance").value = n.importance || "media";
   $("#ed-tags").value = (n.tags || []).join(", ");
   $("#ed-due").value = (n.due || "").slice(0, 10);
@@ -505,6 +507,7 @@ function gatherNote() {
     title: $("#ed-title").value.trim() || "Sem titulo",
     content: state.blockEditor.plainText(),
     blocks: state.blockEditor.getBlocks(),
+    layout: state.blockEditor.getLayout(),
     importance: $("#ed-importance").value,
     tags: $("#ed-tags").value.split(/[,;]/).map((t) => t.trim()).filter(Boolean),
     notebook_id: $("#ed-notebook").value,
@@ -587,6 +590,10 @@ function initBlockEditor() {
     onImageFiles: uploadImages,
   });
   state.blockEditor.setBlocks([]);
+  state.blockEditor.setLayout("flow", false);
+  $("#block-layout").addEventListener("click", () => {
+    state.blockEditor.setLayout(state.blockEditor.getLayout() === "free" ? "flow" : "free");
+  });
 }
 
 async function uploadImages(files) {

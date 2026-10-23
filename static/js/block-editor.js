@@ -26,7 +26,9 @@
       this.blocks = [];
       this.history = [];
       this.historyIndex = -1;
+      this.layout = "flow";
       this.draggedId = null;
+      this.dragOffset = { x: 0, y: 0 };
       this.dropPosition = "before";
       this.menuBlockId = null;
       this.activeBlockId = null;
@@ -36,12 +38,18 @@
 
     normalize(blocks) {
       const seen = new Set();
-      const normalized = (Array.isArray(blocks) ? blocks : []).filter((block) => block && typeof block === "object").map((block) => {
+      const normalized = (Array.isArray(blocks) ? blocks : []).filter((block) => block && typeof block === "object").map((block, index) => {
         let id = String(block.id || blockId());
         if (seen.has(id)) id = blockId();
         seen.add(id);
         const type = TYPES[block.type] ? block.type : "paragraph";
         const normalizedBlock = { id, type, text: String(block.text || ""), ...(type === "checklist" ? { checked: Boolean(block.checked) } : {}) };
+        const position = block.position && typeof block.position === "object" ? block.position : {};
+        normalizedBlock.position = {
+          x: clamp(position.x, 0, 4000, 24 + (index % 2) * 360),
+          y: clamp(position.y, 0, 6000, 24 + Math.floor(index / 2) * 170),
+          w: clamp(position.w, 180, 900, type === "image" ? 460 : 320),
+        };
         if (type === "image" && block.asset && typeof block.asset === "object") {
           normalizedBlock.asset = {
             id: String(block.asset.id || ""),
@@ -62,7 +70,7 @@
         }
         return normalizedBlock;
       });
-      return normalized.length ? normalized : [{ id: blockId(), type: "paragraph", text: "" }];
+      return normalized.length ? normalized : [{ id: blockId(), type: "paragraph", text: "", position: { x: 24, y: 24, w: 320 } }];
     }
 
     setBlocks(blocks) {
@@ -71,6 +79,24 @@
       this.history = [clone(this.blocks)];
       this.historyIndex = 0;
       this.render();
+    }
+
+    setLayout(layout, notify = true) {
+      this.syncFromDom();
+      this.layout = layout === "free" ? "free" : "flow";
+      this.render();
+      const button = document.querySelector("#block-layout");
+      if (button) {
+        const free = this.layout === "free";
+        button.classList.toggle("active", free);
+        button.textContent = free ? "☷ Organizar" : "✥ Modo livre";
+        button.title = free ? "Voltar ao layout organizado" : "Arrastar textos e imagens livremente";
+      }
+      if (notify) this.onChange(clone(this.blocks));
+    }
+
+    getLayout() {
+      return this.layout;
     }
 
     getBlocks() {
@@ -92,7 +118,7 @@
     appendText(text) {
       const last = this.blocks[this.blocks.length - 1];
       if (last && last.type === "paragraph" && !last.text) last.text = text;
-      else this.blocks.push({ id: blockId(), type: "paragraph", text });
+      else this.blocks.push({ id: blockId(), type: "paragraph", text, position: this.nextFreePosition() });
       this.commit();
       this.focusBlock(this.blocks[this.blocks.length - 1].id, true);
     }
@@ -112,12 +138,18 @@
         width: 100,
         align: "center",
         crop: { ratio: "original", zoom: 100, x: 50, y: 50, open: false },
+        position: this.nextFreePosition(460),
       };
       const activeIndex = this.activeBlockId ? this.blocks.findIndex((block) => block.id === this.activeBlockId) : -1;
       const index = activeIndex >= 0 ? activeIndex + 1 : this.blocks.length;
       this.blocks.splice(Math.max(0, index), 0, image);
       this.commit();
       this.focusBlock(image.id);
+    }
+
+    nextFreePosition(width = 320) {
+      const index = this.blocks.length;
+      return { x: 24 + (index % 2) * 360, y: 24 + Math.floor(index / 2) * 170, w: width };
     }
 
     replaceText(search, replacement) {
@@ -183,6 +215,8 @@
         const row = event.target.closest(".block-row");
         if (!row) return;
         this.draggedId = row.dataset.id;
+        const rowRect = row.getBoundingClientRect();
+        this.dragOffset = { x: event.clientX - rowRect.left, y: event.clientY - rowRect.top };
         row.classList.add("dragging");
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/plain", this.draggedId);
@@ -191,6 +225,10 @@
         event.preventDefault();
         if (event.dataTransfer?.files?.length) {
           this.root.classList.add("block-image-drop");
+          return;
+        }
+        if (this.layout === "free") {
+          event.dataTransfer.dropEffect = "move";
           return;
         }
         const row = event.target.closest(".block-row");
@@ -208,6 +246,16 @@
           const target = event.target.closest(".block-row");
           if (target) this.activeBlockId = target.dataset.id;
           this.onImageFiles(imageFiles);
+          return;
+        }
+        if (this.layout === "free" && this.draggedId) {
+          const block = this.blocks.find((item) => item.id === this.draggedId);
+          const bounds = this.root.getBoundingClientRect();
+          if (!block) return;
+          block.position = block.position || this.nextFreePosition();
+          block.position.x = clamp(event.clientX - bounds.left + this.root.scrollLeft - this.dragOffset.x, 0, 4000, 0);
+          block.position.y = clamp(event.clientY - bounds.top + this.root.scrollTop - this.dragOffset.y, 0, 6000, 0);
+          this.commit();
           return;
         }
         const target = event.target.closest(".block-row");
@@ -276,7 +324,7 @@
         event.preventDefault();
         this.syncFromDom();
         const index = this.blocks.findIndex((block) => block.id === row.dataset.id);
-        const next = { id: blockId(), type: this.blocks[index].type === "divider" ? "paragraph" : this.blocks[index].type, text: "" };
+        const next = { id: blockId(), type: this.blocks[index].type === "divider" ? "paragraph" : this.blocks[index].type, text: "", position: this.nextFreePosition() };
         if (next.type === "checklist") next.checked = false;
         this.blocks.splice(index + 1, 0, next);
         this.commit();
@@ -337,7 +385,7 @@
 
     removeBlock(id) {
       const index = this.blocks.findIndex((block) => block.id === id);
-      if (this.blocks.length === 1) this.blocks[0] = { id: blockId(), type: "paragraph", text: "" };
+      if (this.blocks.length === 1) this.blocks[0] = { id: blockId(), type: "paragraph", text: "", position: this.nextFreePosition() };
       else this.blocks = this.blocks.filter((block) => block.id !== id);
       this.activeBlockId = this.blocks[Math.max(0, index - 1)]?.id || this.blocks[0]?.id || null;
       this.commit();
@@ -380,8 +428,10 @@
     handleImageAction(id, action) {
       const block = this.blocks.find((item) => item.id === id && item.type === "image");
       if (!block) return;
-      if (action === "smaller") block.width = clamp((block.width || 100) - 10, 20, 100, 100);
-      if (action === "larger") block.width = clamp((block.width || 100) + 10, 20, 100, 100);
+      if (action === "smaller" && this.layout === "free") block.position.w = clamp(block.position.w - 40, 180, 900, 460);
+      else if (action === "larger" && this.layout === "free") block.position.w = clamp(block.position.w + 40, 180, 900, 460);
+      else if (action === "smaller") block.width = clamp((block.width || 100) - 10, 20, 100, 100);
+      else if (action === "larger") block.width = clamp((block.width || 100) + 10, 20, 100, 100);
       if (action.startsWith("align-")) block.align = action.replace("align-", "");
       if (action === "crop") block.crop.open = !block.crop.open;
       if (action === "reset-crop") block.crop = { ratio: "original", zoom: 100, x: 50, y: 50, open: true };
@@ -437,6 +487,7 @@
 
     render() {
       this.silent = true;
+      this.root.classList.toggle("free-layout", this.layout === "free");
       let numbered = 0;
       this.root.innerHTML = this.blocks.map((block) => {
         const config = TYPES[block.type];
@@ -451,7 +502,7 @@
           const imageStyle = ratio ? `object-position:${crop.x}% ${crop.y}%;transform:scale(${crop.zoom / 100})` : "";
           body = `<figure class="block-image-figure align-${block.align}" style="width:${block.width}%">
             <div class="image-tools" contenteditable="false" aria-label="Controles da imagem">
-              <button type="button" data-image-action="smaller" title="Diminuir imagem" aria-label="Diminuir imagem">−</button><span class="image-size-label">${block.width}%</span><button type="button" data-image-action="larger" title="Aumentar imagem" aria-label="Aumentar imagem">+</button>
+              <button type="button" data-image-action="smaller" title="Diminuir imagem" aria-label="Diminuir imagem">−</button><span class="image-size-label">${this.layout === "free" ? `${block.position.w}px` : `${block.width}%`}</span><button type="button" data-image-action="larger" title="Aumentar imagem" aria-label="Aumentar imagem">+</button>
               <span class="image-tools-separator"></span>
               <button type="button" data-image-action="align-left" class="${block.align === "left" ? "active" : ""}" title="Alinhar a esquerda">←</button><button type="button" data-image-action="align-center" class="${block.align === "center" ? "active" : ""}" title="Centralizar">↔</button><button type="button" data-image-action="align-right" class="${block.align === "right" ? "active" : ""}" title="Alinhar a direita">→</button>
               <span class="image-tools-separator"></span><button type="button" data-image-action="crop" class="${crop.open ? "active" : ""}">Cortar</button>
@@ -468,8 +519,20 @@
         } else {
           body = `${marker}<div class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div>`;
         }
-        return `<div class="block-row type-${block.type}" data-id="${block.id}"><div class="block-controls"><button type="button" class="block-grip" draggable="true" title="Arraste para mover esta frase" aria-label="Arraste para mover esta frase">⠿</button><button type="button" data-block-action="delete" title="Excluir bloco">×</button></div><div class="block-content">${body}</div></div>`;
+        const position = block.position || this.nextFreePosition(block.type === "image" ? 460 : 320);
+        const freeStyle = this.layout === "free" ? `style="left:${position.x}px;top:${position.y}px;width:${position.w}px"` : "";
+        const dragTitle = this.layout === "free" ? "Segure e arraste para qualquer lugar" : "Arraste para reorganizar";
+        return `<div class="block-row type-${block.type}" data-id="${block.id}" ${freeStyle}><div class="block-controls"><button type="button" class="block-grip" draggable="true" title="${dragTitle}" aria-label="${dragTitle}">⠿</button><button type="button" data-block-action="delete" title="Excluir bloco">×</button></div><div class="block-content">${body}</div></div>`;
       }).join("");
+      if (this.layout === "free") {
+        const bottom = this.blocks.reduce((max, block) => Math.max(max, (block.position?.y || 0) + (block.type === "image" ? 560 : 180)), 700);
+        const right = this.blocks.reduce((max, block) => Math.max(max, (block.position?.x || 0) + (block.position?.w || 320) + 40), 760);
+        this.root.style.minHeight = `${bottom}px`;
+        this.root.style.minWidth = `${right}px`;
+      } else {
+        this.root.style.minHeight = "430px";
+        this.root.style.minWidth = "";
+      }
       this.silent = false;
     }
 

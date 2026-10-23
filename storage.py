@@ -373,6 +373,7 @@ def enrich_note(note):
     note.setdefault("pinned", False)
     note.setdefault("favorite", False)
     note.setdefault("parent_id", None)
+    note.setdefault("layout", "flow")
     note.setdefault("archived", False)
     note.setdefault("color", "")
     note.setdefault("source_file", "")
@@ -437,6 +438,7 @@ def upsert_note(payload):
             "pinned": bool(payload.get("pinned", note.get("pinned", False))),
             "favorite": bool(payload.get("favorite", note.get("favorite", False))),
             "parent_id": payload.get("parent_id") or None,
+            "layout": payload.get("layout") if payload.get("layout") in {"flow", "free"} else note.get("layout", "flow"),
             "archived": bool(payload.get("archived", note.get("archived", False))),
             "color": payload.get("color", note.get("color", "")),
             "date": payload.get("date") or note.get("date"),
