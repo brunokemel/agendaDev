@@ -54,8 +54,8 @@
         normalizedBlock.position = {
           x: clamp(position.x, 0, 4000, 24 + (index % 2) * 360),
           y: clamp(position.y, 0, 6000, 24 + Math.floor(index / 2) * 170),
-          w: clamp(position.w, 180, 900, type === "image" ? 460 : 320),
-          h: clamp(position.h, 60, 900, type === "shape" ? 140 : 180),
+          w: clamp(position.w, type === "shape" ? 24 : 180, 900, type === "image" ? 460 : 320),
+          h: clamp(position.h, type === "shape" ? 24 : 60, 900, type === "shape" ? 140 : 180),
         };
         if (type === "image" && block.asset && typeof block.asset === "object") {
           normalizedBlock.asset = {
@@ -233,6 +233,8 @@
         if (row) this.activeBlockId = row.dataset.id;
       });
       this.root.addEventListener("click", (event) => {
+        this.root.querySelectorAll(".type-shape.is-selected").forEach((row) => row.classList.remove("is-selected"));
+        event.target.closest(".type-shape")?.classList.add("is-selected");
         if ((event.ctrlKey || event.metaKey) && event.target.closest(".block-input") && this.openLinkAtPoint(event)) return;
         const imageAction = event.target.closest("[data-image-action]");
         if (imageAction) {
@@ -436,8 +438,8 @@
         if (!block || !row) return;
         const dx = event.clientX - resize.startX;
         const dy = event.clientY - resize.startY;
-        const minWidth = block.shape?.kind === "arrow" ? 40 : 100;
-        const minHeight = block.shape?.kind === "arrow" ? 24 : 60;
+        const minWidth = block.shape?.kind === "arrow" ? 24 : 48;
+        const minHeight = block.shape?.kind === "arrow" ? 24 : 36;
         if (resize.corner.includes("e")) block.position.w = clamp(resize.width + dx, minWidth, 900, resize.width);
         if (resize.corner.includes("s")) block.position.h = clamp(resize.height + dy, minHeight, 900, resize.height);
         if (resize.corner.includes("w")) {
@@ -529,16 +531,18 @@
     updateShapeDrawing(event) {
       event.preventDefault();
       const draw = this.shapeDraw;
+      const coalesced = event.getCoalescedEvents?.();
+      const point = coalesced?.length ? coalesced[coalesced.length - 1] : event;
       const bounds = this.root.getBoundingClientRect();
-      const currentX = clamp(event.clientX - bounds.left, 0, 4000, draw.startX);
-      const currentY = clamp(event.clientY - bounds.top, 0, 6000, draw.startY);
+      const currentX = clamp(point.clientX - bounds.left, 0, 4000, draw.startX);
+      const currentY = clamp(point.clientY - bounds.top, 0, 6000, draw.startY);
       const dx = currentX - draw.startX;
       const dy = currentY - draw.startY;
       draw.flipX = dx < 0;
       draw.flipY = dy < 0;
       draw.axis = draw.kind === "arrow" ? (Math.abs(dy) < 18 ? "horizontal" : Math.abs(dx) < 18 ? "vertical" : "diagonal") : "horizontal";
-      draw.width = Math.max(Math.abs(dx), draw.kind === "arrow" ? 40 : 100);
-      draw.height = Math.max(Math.abs(dy), draw.kind === "arrow" ? 24 : 60);
+      draw.width = Math.max(Math.abs(dx), 8);
+      draw.height = Math.max(Math.abs(dy), 8);
       draw.x = dx < 0 ? draw.startX - draw.width : draw.startX;
       draw.y = dy < 0 ? draw.startY - draw.height : draw.startY;
       draw.draft.style.left = `${draw.x}px`;
@@ -786,7 +790,7 @@
           const kind = block.shape?.kind || "rectangle";
           const shape = block.shape || { kind };
           const shapeClasses = `shape-block kind-${kind} axis-${shape.axis || "horizontal"} ${shape.flipX ? "flip-x" : ""} ${shape.flipY ? "flip-y" : ""}`;
-          body = `<div class="${shapeClasses}">${this.shapeSvg(kind, shape)}<div class="shape-label block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div>${this.shapeHandles(shape)}</div>`;
+          body = `<div class="${shapeClasses}">${this.shapeSvg(kind, shape)}<div class="shape-label block-input" contenteditable="true" role="textbox" data-placeholder="Rotulo">${this.escape(block.text)}</div>${this.shapeHandles(shape)}</div>`;
         } else {
           body = `${marker}<div class="block-input" contenteditable="true" role="textbox" data-placeholder="${config.placeholder}">${this.escape(block.text)}</div>`;
         }
