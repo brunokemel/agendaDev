@@ -348,10 +348,11 @@
 
     startPointerDrag(event) {
       if (this.layout !== "free" || event.button !== 0) return;
-      const handle = event.target.closest(".block-grip, .image-frame");
-      const row = handle?.closest(".block-row");
-      if (!handle || !row) return;
-      event.preventDefault();
+      const row = event.target.closest(".block-row");
+      const imageHandle = event.target.closest(".image-frame");
+      if (!row || (!imageHandle && event.target.closest("button, input, select, a, .image-tools, .image-crop-panel"))) return;
+      const handle = imageHandle || row;
+      if (imageHandle) event.preventDefault();
       this.syncFromDom();
       const rect = row.getBoundingClientRect();
       this.pointerDrag = {
@@ -360,10 +361,11 @@
         handle,
         offsetX: event.clientX - rect.left,
         offsetY: event.clientY - rect.top,
+        startX: event.clientX,
+        startY: event.clientY,
         moved: false,
       };
       handle.setPointerCapture(event.pointerId);
-      row.classList.add("pointer-dragging");
     }
 
     movePointerDrag(event) {
@@ -373,10 +375,15 @@
       const block = this.blocks.find((item) => item.id === drag.id);
       const row = this.root.querySelector(`[data-id="${CSS.escape(drag.id)}"]`);
       if (!block || !row) return;
+      if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        row.classList.add("pointer-dragging");
+        window.getSelection()?.removeAllRanges();
+      }
       const bounds = this.root.getBoundingClientRect();
       const x = clamp(event.clientX - bounds.left - drag.offsetX, 0, 4000, 0);
       const y = clamp(event.clientY - bounds.top - drag.offsetY, 0, 6000, 0);
-      drag.moved = drag.moved || Math.abs(x - block.position.x) > 2 || Math.abs(y - block.position.y) > 2;
       block.position.x = x;
       block.position.y = y;
       row.style.left = `${x}px`;
